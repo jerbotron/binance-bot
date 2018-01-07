@@ -1,0 +1,107 @@
+{ eventType: '24hrTicker',
+  eventTime: 1515132587345,
+  symbol: 'TRXETH',
+  priceChange: '0.00009127',
+  priceChangePercent: '59.370',
+  weightedAvg: '0.00020360',
+  prevDayClose: '0.00015399',
+  curDayClose: '0.00024500',
+  closeTradeQuantity: '744.00000000',
+  bestBid: '0.00024408',
+  bestBidQnt: '1222.00000000',
+  bestAsk: '0.00024500',
+  bestAskQnt: '1509.00000000',
+  open: '0.00015373',
+  high: '0.00032000',
+  low: '0.00014001',
+  volume: '3310037644.00000000',
+  volumeQuote: '673935.16503555',
+  openTime: 1515046187331,
+  closeTime: 1515132587331,
+  firstTradeId: 2170475,
+  lastTradeId: 2802520,
+  totalTrades: 632046 }
+
+{ eventType: 'kline',
+  eventTime: 1515137076195,
+  symbol: 'TRXETH',
+  startTime: 1515137040000,
+  closeTime: 1515137099999,
+  firstTradeId: 2826433,
+  lastTradeId: 2826711,
+  open: '0.00020903',
+  high: '0.00020903',
+  low: '0.00020600',
+  close: '0.00020899',
+  volume: '1495188.00000000',
+  trades: 279,
+  interval: '1m',
+  isFinal: false,
+  quoteVolume: '309.99324846',
+  buyVolume: '1089919.00000000',
+  quoteBuyVolume: '226.04016354' }
+
+{ eventType: 'aggTrade',
+  eventTime: 1515138299908,
+  symbol: 'TRXETH',
+  price: '0.00020099',
+  quantity: '10.00000000',
+  maker: false,
+  tradeId: 2337500 }
+
+EOSETH
+SNTETH
+BNBETH
+OAXETH
+MCOETH
+ICNETH
+LRCETH
+OMGETH
+KNCETH
+FUNETH
+SNMETH
+NEOETH
+LINKETH
+XVGETH
+CTRETH
+SALTETH
+MDAETH
+MTLETH
+ETCETH
+ENGETH
+DASHETH
+BTGETH
+REQETH
+HSRETH
+TRXETH
+ARKETH
+XRPETH
+MODETH
+ENJETH
+VENETH
+NULSETH
+DLTETH
+BATETH
+BCPTETH
+ARNETH
+GVTETH
+POEETH
+BTSETH
+LSKETH
+TNTETH
+MANAETH
+DGDETH
+ADAETH
+CMTETH
+XLMETH
+CNDETH
+WABIETH
+LTCETH
+GTOETH
+ELFETH
+AIONETH
+NEBLETH
+BRDETH
+EDOETH
+NAVETH
+TRIGETH
