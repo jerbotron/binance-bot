@@ -13,28 +13,30 @@ class AlertBot {
 			appSecret: CONFIG.FB_APP_SECRET
 		});
 		this.chat = undefined;
-		this.beginAlert;
+		this.alertOn = false;
 
 		this.bot.on('message', (payload, chat) => {
 			if (!this.chat) {
 				this.chat = chat;
 				chat.say("Hi, welcome to Jerbotron! Enter 'start' to begin receiving alerts.");
-			} else {
-				const text = payload.message.text;
-				chat.say(text);
-			}
+			};
 		});
 
 		this.bot.hear('start', (payload, chat) => {
 			chat.say("Beginning alerts now...");
-			this.beginAlert = true;
+			this.alertOn = true;
+		});
+
+		this.bot.hear('stop', (payload, chat) => {
+			chat.say("Stopping alerts now...");
+			this.alertOn = false;
 		});
 
 		this.bot.start();
 	}
 
 	say(msg) {
-		if (this.beginAlert && this.chat) {
+		if (this.alertOn && this.chat) {
 			this.chat.say(msg);
 		}
 	}
