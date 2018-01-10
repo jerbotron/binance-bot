@@ -31,7 +31,13 @@ class Tracker {
 		})
 	}
 
-	trackTicker() {
+	trackTicker(product) {
+		this.client.ws.ticker(product, ticker => {
+			console.log(ticker);
+		});
+	}
+
+	trackAllTickers() {
 		this.client.ws.allTickers(products => {
 			console.log(products);
 		});
@@ -40,18 +46,16 @@ class Tracker {
 	/*
 		wSize = window size in minutes
 	*/
-	trackAllEth(wSize) {
+	trackAllEth(wSize, threshold) {
 		const trackerMap = {};
 		this.client.ws.allTickers(products => {
 			products.forEach(ticker => {
-				// if (isBaseEth(ticker)) {
-				if (ticker.symbol == "TRXETH") {
-					console.log("got ticker");
+				if (isBaseEth(ticker)) {
+				// if (ticker.symbol == "TRXETH") {
 					if (!trackerMap[ticker.symbol]) {
-						trackerMap[ticker.symbol] = new TickerData(this.msgBot, ticker.symbol, wSize, 0);
+						trackerMap[ticker.symbol] = new TickerData(this.msgBot, ticker.symbol, wSize, threshold);
 					}
 					trackerMap[ticker.symbol].enqueueTicker(ticker);
-					this.fStream.write(`${msToMin(ticker.eventTime)}\t${ticker.bestAsk}\t${ticker.bestBid}\n`);
 				}
 			});
 		});
@@ -111,10 +115,6 @@ class Tracker {
 		this.fStream.write(`${msg}\n`);
 		console.log(msg);
 	}
-
-	printArray(arr) {
-		console.log(`[${arr.map(x => x).join('\t')}]`);
-	}
 }
 
 class TickerData {
@@ -123,6 +123,7 @@ class TickerData {
 		this.msgBot = msgBot;
 		this.wSize = wSize;
 		this.alertThreshold = alertThreshold;
+		this.logger = fs.createWriteStream(`logs/${this.symbol}.txt`);
 		this.maArr = new Array(wSize);
 		this.startTimestamp = undefined;
 		this.lastMA = undefined; // size 2 array [askMA, bidMA]
@@ -134,7 +135,7 @@ class TickerData {
 		if (!this.startTimestamp) {
 			this.startTimestamp = timestamp;
 		} else if (timestamp - this.startTimestamp >= this.wSize) {
-			this.tryAlert();
+			this.tryAlert(ticker);
 			for (let i = this.startTimestamp; i <= timestamp - this.wSize; i++) {
 				this.maArr[i % this.wSize] = undefined;
 			}
@@ -165,27 +166,30 @@ class TickerData {
 		return [totalAsk / totalSize, totalBid / totalSize];
 	}
 
-	tryAlert() {
+	tryAlert(ticker) {
 		if (!this.lastMA) {
 			this.lastMA = this.getMA();
-			console.log(`Alert: ${this.symbol} first MA collected at ${this.lastMA}`);
+			// console.log(`Alert: ${this.symbol} first MA collected at ${this.lastMA}`);
 			return;
 		}
 
 		let ma = this.getMA();
-		let askPercentChange = (1 - ma[0] / this.lastMA[0]) * 100;
-		let bidPercentChange = (1 - ma[1] / this.lastMA[1]) * 100;
+		let askPercentChange = (ma[0] / this.lastMA[0] - 1) * 100;
+		let bidPercentChange = (ma[1] / this.lastMA[1] - 1) * 100;
+		this.logger.write(`${ma[0]}\t${askPercentChange}\t${ticker.bestAsk}\t${ticker.bestAskQnt}\t${ma[1]}\t${bidPercentChange}\t${ticker.bestBid}\t${ticker.bestBidQnt}\n`)
 
 		if (Math.abs(askPercentChange) >= this.alertThreshold) {
 			let action = (askPercentChange >= 0) ? "rose" : "dropped";
-			console.log(`Alert: ${this.symbol} ask price just ${action} by ${askPercentChange}`);
-			this.msgBot.say(`Alert: ${this.symbol} ask price just ${action} by ${askPercentChange}`);
+			console.log(`Alert: ${this.symbol} ask price just ${action} by ${askPercentChange} from ${this.lastMA[0]} to ${ma[0]}`);
+			this.msgBot.say(`Alert: ${this.symbol} ask price just ${action} by ${askPercentChange} from ${this.lastMA[0]} to ${ma[0]}`);
 		}
 		if (Math.abs(bidPercentChange) >= this.alertThreshold) {
 			let action = (bidPercentChange >= 0) ? "rose" : "dropped";
-			console.log(`Alert: ${this.symbol} bid price just ${action} by ${bidPercentChange}`);
-			this.msgBot.say(`Alert: ${this.symbol} bid price just ${action} by ${bidPercentChange}`);
+			console.log(`Alert: ${this.symbol} bid price just ${action} by ${bidPercentChange} from ${this.lastMA[1]} to ${ma[1]}`);
+			this.msgBot.say(`Alert: ${this.symbol} bid price just ${action} by ${bidPercentChange} from ${this.lastMA[1]} to ${ma[1]}`);
 		}
+
+		this.lastMA = ma;
 	}
 }
 

@@ -1,6 +1,8 @@
 node_modules/
 dist/
+logs/
 package-lock.json
 config.json
 test.js
 log.txt
+
