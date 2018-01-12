@@ -148,6 +148,8 @@ class TickerData {
 		} else {
 			this.maArr[index].addTicker(ticker.bestAsk, ticker.bestBid);
 		}
+
+		this.logger.write(`${ticker.bestAsk}\t${ticker.bestAskQnt}\t${ticker.bestBid}\t${ticker.bestBidQnt}\n`)
 	}
 
 	// return [askMA, bidMA] array
@@ -176,7 +178,6 @@ class TickerData {
 		let ma = this.getMA();
 		let askPercentChange = (ma[0] / this.lastMA[0] - 1) * 100;
 		let bidPercentChange = (ma[1] / this.lastMA[1] - 1) * 100;
-		this.logger.write(`${ma[0]}\t${askPercentChange}\t${ticker.bestAsk}\t${ticker.bestAskQnt}\t${ma[1]}\t${bidPercentChange}\t${ticker.bestBid}\t${ticker.bestBidQnt}\n`)
 
 		if (Math.abs(askPercentChange) >= this.alertThreshold) {
 			let action = (askPercentChange >= 0) ? "rose" : "dropped";
