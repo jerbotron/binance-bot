@@ -149,7 +149,7 @@ class TickerData {
 			this.maArr[index].addTicker(ticker.bestAsk, ticker.bestBid);
 		}
 
-		this.logger.write(`${ticker.bestAsk}\t${ticker.bestAskQnt}\t${ticker.bestBid}\t${ticker.bestBidQnt}\n`)
+		this.logger.write(`${timestamp}\t${ticker.bestAsk}\t${ticker.bestAskQnt}\t${ticker.bestBid}\t${ticker.bestBidQnt}\n`)
 	}
 
 	// return [askMA, bidMA] array

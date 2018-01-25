@@ -14,7 +14,8 @@
     "binance-api-node": "^0.4.3",
     "body-parser": "^1.18.2",
     "bootbot": "^1.0.14",
-    "express": "^4.16.2"
+    "express": "^4.16.2",
+    "plotly": "^1.0.6"
   },
   "devDependencies": {
     "babel-cli": "^6.26.0",
