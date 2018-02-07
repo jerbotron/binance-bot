@@ -39,7 +39,7 @@ class Tracker {
 	trackTicker(symbol, wSize) {
 		const de = new DataEngine(symbol, wSize);
 		const at = new AutoTrader(symbol, de, this.msgBot);
-		const logger = fs.createWriteStream(`logs/${symbol}.txt`);
+		// const logger = fs.createWriteStream(`logs/${symbol}.txt`);
 		this.client.ws.ticker(symbol, ticker => {
 			// console.log(`${msToS(ticker.eventTime)}\t${ticker.bestAsk}\t${ticker.bestBid}\n`);
 			// logger.write(`${msToS(ticker.eventTime)}\t${ticker.bestAsk}\t${ticker.bestBid}\n`);

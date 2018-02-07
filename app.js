@@ -14,7 +14,7 @@ app.listen(8080, () => console.log('Jerbotron webhook listening on port 8080...'
 const tracker = new Tracker();
 
 // tracker.trackAllEth(1, 3);
-tracker.trackTicker('VENBNB', 240);
+tracker.trackTicker('VENBNB', 300);
 
 // const client = Binance({
 // 	apiKey: CONFIG.API_KEY,
