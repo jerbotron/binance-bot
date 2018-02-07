@@ -2,124 +2,110 @@
 
 "use strict";
 
-const CONFIG = require("../config.json");
+import fs from 'fs';
+import Rx from 'rxjs/Rx';
+import TickerSum from './data/TickerSum.js'
+import StatData from './data/StatData.js'
 
-var plotly = require("plotly")(CONFIG.PLOTLY_USERNAME, CONFIG.PLOTLY_API_KEY);
-var lineReader = require("readline").createInterface({
-	input: require("fs").createReadStream("./data/01_11_18/ADAETH.txt")
-});
+const BOLLINGER_BAND_FACTOR = 2;
 
-let data = [], time = [];
+/*
+	Collect data for a single coin ticker, analyze the data in real time and 
+	emit trade signals and alerts
+*/
+export default class DataEngine {
 
-let smaData = [], emaData = [], maTime = [];
-let prevSma = null, prevEma = null;
+	constructor(symbol, wSize) {
+		this.symbol = symbol;
+		this.wSize = wSize;
+		this.startTimestamp = null;
+		this.dataArr = new Array(wSize);
+		this.ema = [null, null];	// size 2 array [askEma, bidEma]
+		this.std = [null, null];	// size 2 array [askStd, bidStd]
+		this.logger = fs.createWriteStream(`logs/${this.symbol}_stats.txt`);
+		this.count = 0;
 
-let stdDataCeil = [], stdDataFloor = [];
+		this.askSubject = new Rx.Subject();
+		this.buySubject = new Rx.Subject();
+	}
 
-let n = 0, period = 300;	// in seconds
-
-lineReader.on("line", line => {
-	let arr = line.split("\t");
-
-	// Create raw data set
-	data.push(arr[0]);
-	time.push(n);
-	n++;
-
-	// Create SMA and EMA data sets
-	if (n >= period) {
-		// SMA
-		// if (prevSma == null) {
-		// 	prevSma = calcAvg(data.slice(0, period));
-		// } else {
-		// 	prevSma = calcSma(parseFloat(data[n-period-1]), parseFloat(data[n-1]), prevSma, period);
-		// }
-		smaData.push(prevSma);
-		// EMA
-		if (prevEma == null) {
-			prevEma = calcAvg(data.slice(0, period));
-			emaData.push(prevEma);
-		} else {
-			let ema = calcEma(data[n-1], prevEma, period);
-			emaData.push(ema);
-			prevEma = ema;
+	enqueue(ticker) {
+		this.dataArr[this.count % this.wSize] = new Ticker(ticker.bestAsk, ticker.bestBid);
+		this.count++;
+		if (this.count >= this.wSize) {
+			this.calculateStats(ticker);
+			this.logger.write(`${ticker.eventTime}\t${ticker.bestAsk}\t${ticker.bestBid}\t${this.ema[0]}\t${this.ema[1]}\t${this.std[0]}\t${this.std[1]}\n`)
 		}
-		// Standard Deviation
-		let std = calcStd(data.slice(n-period, n));
-		stdDataCeil.push(prevEma + std*1.5);
-		stdDataFloor.push(prevEma - std*1.5);
-		maTime.push(n);
-	}
-});
-
-lineReader.on("close", () => {
-	var dataTrace = {
-		x: time,
-		y: data,
-		name: "Ticker Price",
-		type: "scatter"
-	};
-
-	var smaTrace = {
-		x: maTime,
-		y: smaData,
-		name: "SMA",
-		type: "scatter"
-	};
-
-	var emaTrace = {
-		x: maTime,
-		y: emaData,
-		name: "EMA",
-		type: "scatter"
-	};
-
-	var stdTraceCeil = {
-		x: maTime,
-		y: stdDataCeil,
-		name: "STD Ceil",
-		type: "scatter"
+		let ceil = [this.ema[0] + BOLLINGER_BAND_FACTOR * this.std[0], this.ema[1] + BOLLINGER_BAND_FACTOR * this.std[1]];
+		let floor = [this.ema[0] - BOLLINGER_BAND_FACTOR * this.std[0], this.ema[1] - BOLLINGER_BAND_FACTOR * this.std[1]];
+		// console.log(`${ticker.eventTime}\t${ticker.bestAsk}\t${floor[0]}\t${this.ema[0]}\t${ceil[0]}\t${ticker.bestBid}\t${floor[1]}\t${this.ema[1]}\t${ceil[1]}\n`);
 	}
 
-	var stdTraceFloor = {
-		x: maTime,
-		y: stdDataFloor,
-		name: "STD Floor",
-		type: "scatter"
+	calculateStats(ticker) {
+		this.ema = (this.ema[0] == null || this.ema[1] == null) ? this.calcAvg() : this.calcEma(ticker.bestAsk, ticker.bestBid);
+		this.std = this.calcStd();
+		this.askSubject.next(new StatData(ticker.bestAsk, this.ema[0], this.std[0]));
+		this.buySubject.next(new StatData(ticker.bestBid, this.ema[1], this.std[1]));
 	}
 
-	var options = { fileopt: "overwrite", filename: "ema-plot" };
-	var plotData = [dataTrace, emaTrace, stdTraceCeil, stdTraceFloor];
+	alertAskPrice() {
+		return this.askSubject;
+	}
 
-	plotly.plot(plotData, options, function(err, msg) {
-		if (err) return console.log(err);
-		console.log(msg);
-	});
-});
+	alertBuyPrice() {
+		return this.buySubject;
+	}
 
-function calcSma(begin, close, prev, period) {
-	return prev + (close - begin) / period;
+	// Returns size 2 array [askAvg, bidAvg]
+	calcAvg() {
+		let askSum = 0, bidSum = 0;
+		let size = 0
+		this.dataArr.forEach(ticker => {
+			if (ticker != null) {
+				askSum += ticker.getAsk();
+				bidSum += ticker.getBid();
+				size++;
+			}
+		});
+		return [askSum/size, bidSum/size];
+	}
+
+	// Returns size 2 array [askEma, bidEma]
+	calcEma(ask, bid) {
+		let weight = 2 / (this.wSize +1);
+		let askEma = (ask - this.ema[0]) * weight + this.ema[0];
+		let bidEma = (bid - this.ema[1]) * weight + this.ema[1];
+		return [askEma, bidEma];
+	}
+
+	// Returns size 2 array [askStd, bidStd]
+	calcStd() {
+		let u = this.calcAvg();
+		let sum = [0 , 0];
+		let size = 0;
+		this.dataArr.forEach(ticker => {
+			if (ticker != null) {
+				sum[0] += Math.pow(ticker.getAsk() - u[0], 2);
+				sum[1] += Math.pow(ticker.getBid() - u[1], 2);
+				size++;
+			}
+		});
+		return [Math.sqrt(sum[0]/size), Math.sqrt(sum[1]/size)];
+	}
+
 }
 
-function calcEma(close, prev, period) {
-	let weight = 2/(period + 1);
-	let ema = (close - prev) * weight + prev;
-	return ema;
-}
+class Ticker {
+	constructor(ask, bid) {
+		this.ask = parseFloat(ask);
+		this.bid = parseFloat(bid);
+	}
 
-function calcAvg(data) {
-	let total = 0;
-	data.forEach(n => {
-		total += parseFloat(n);
-	});
-	return total/data.length;
-}
+	getAsk() {
+		return this.ask;
+	}
 
-function calcStd(data) {
-	let u = calcAvg(data);
-	let sum = 0;
-	data.forEach(n => {
-		sum += Math.pow(parseFloat(n)-u, 2);
-	});
-	return Math.sqrt(sum/data.length);
+	getBid() {
+		return this.bid;
+	}
 }

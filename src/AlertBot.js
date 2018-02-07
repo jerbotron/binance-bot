@@ -4,7 +4,7 @@ import BootBot from 'bootbot';
 
 const CONFIG = require("../config.json");
 
-class AlertBot {
+export default class AlertBot {
 
 	constructor() {
 		this.bot = new BootBot({
@@ -40,8 +40,4 @@ class AlertBot {
 			this.chat.say(msg);
 		}
 	}
-}
-
-export {
-	AlertBot
 }
