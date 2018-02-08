@@ -2,7 +2,6 @@
 
 "use strict";
 
-import Binance from 'binance-api-node';
 import fs from 'fs';
 import {
 	isBaseEth,
@@ -17,13 +16,10 @@ import AlertBot from './AlertBot'
 
 class Tracker {
 
-	constructor(msgBot) {
+	constructor(client) {
+		this.client = client;
 		this.msgBot = new AlertBot();
-		this.client = Binance();
 		// this.fStream = fs.createWriteStream('log.txt');
-		// this.fStream.on('finish', () => {
-		// 	console.log("finished collecting data to file");
-		// });
 	}
 
 	stop() {
@@ -37,8 +33,9 @@ class Tracker {
 	}
 
 	trackTicker(symbol, wSize) {
-		const de = new DataEngine(symbol, wSize);
-		const at = new AutoTrader(symbol, de, this.msgBot);
+		const de = new DataEngine(symbol, wSize, this.msgBot);
+		const at = new AutoTrader(this.client, symbol, de, this.msgBot);
+		at.start();
 		// const logger = fs.createWriteStream(`logs/${symbol}.txt`);
 		this.client.ws.ticker(symbol, ticker => {
 			// console.log(`${msToS(ticker.eventTime)}\t${ticker.bestAsk}\t${ticker.bestBid}\n`);

@@ -15,9 +15,10 @@ const BOLLINGER_BAND_FACTOR = 2;
 */
 export default class DataEngine {
 
-	constructor(symbol, wSize) {
+	constructor(symbol, wSize, msgBot) {
 		this.symbol = symbol;
 		this.wSize = wSize;
+		this.msgBot = msgBot;
 		this.startTimestamp = null;
 		this.dataArr = new Array(wSize);
 		this.ema = [null, null];	// size 2 array [askEma, bidEma]
@@ -34,6 +35,7 @@ export default class DataEngine {
 		this.count++;
 		if (this.count >= this.wSize) {
 			if (this.count == this.wSize) {
+				console.log("Trading began");
 				this.msgBot.say("Trading began");
 			}
 			this.calculateStats(ticker);
@@ -41,7 +43,7 @@ export default class DataEngine {
 		}
 		let ceil = [this.ema[0] + BOLLINGER_BAND_FACTOR * this.std[0], this.ema[1] + BOLLINGER_BAND_FACTOR * this.std[1]];
 		let floor = [this.ema[0] - BOLLINGER_BAND_FACTOR * this.std[0], this.ema[1] - BOLLINGER_BAND_FACTOR * this.std[1]];
-		console.log(`${ticker.eventTime}\t${ticker.bestAsk}\t${floor[0]}\t${this.ema[0]}\t${ceil[0]}\t${ticker.bestBid}\t${floor[1]}\t${this.ema[1]}\t${ceil[1]}\n`);
+		// console.log(`${ticker.eventTime}\t${ticker.bestAsk}\t${floor[0]}\t${this.ema[0]}\t${ceil[0]}\t${ticker.bestBid}\t${floor[1]}\t${this.ema[1]}\t${ceil[1]}\n`);
 	}
 
 	calculateStats(ticker) {
