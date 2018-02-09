@@ -8,6 +8,11 @@ const plotly = require("plotly")(CONFIG.PLOTLY_USERNAME, CONFIG.PLOTLY_API_KEY);
 const WINDOW_SIZE_S = 300;
 const BOLLINGER_BAND_FACTOR = 2;
 
+// return date string in format YYYY-MM-DD
+function getDate() {
+	return new Date().toISOString().slice(0,10);
+}
+
 class DataPlotter {
 
 	constructor() {
@@ -16,7 +21,8 @@ class DataPlotter {
 		this.tradeData = new TradeData();
 
 		this.lineReader = require("readline").createInterface({
-			input: require("fs").createReadStream("./logs/VENBNB_stats.txt")
+			// input: require("fs").createReadStream(`./data/${getDate()}/VENBNB_stats.txt`)
+			input: require("fs").createReadStream("./data/02_07_18/VENBNB_stats.txt")
 		});
 
 		this.lineReader.on("close", () => {

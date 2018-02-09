@@ -14,4 +14,9 @@ function msToMin(ms) {
 	return Math.round(ms / 1000 / 60);
 }
 
-export { isBaseEth, msToS, msToMin}
+// return date string in format YYYY-MM-DD
+function getDate() {
+	return new Date().toISOString().slice(0,10);
+}
+
+export { isBaseEth, msToS, msToMin, getDate }

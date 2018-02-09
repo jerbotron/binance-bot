@@ -5,6 +5,7 @@
 import Rx from 'rxjs/Rx'
 import DataEngine from './DataEngine.js'
 import fs from 'fs';
+import { getDate } from './Utils.js';
 
 const Position = Object.freeze({
 	BUY: 'BUY',
@@ -46,7 +47,7 @@ export default class AutoTrader {
 		this.dataEngine = dataEngine;
 		this.msgBot = msgBot;
 		this.client = client;
-		this.logger = fs.createWriteStream(`logs/${this.symbol}_trades.txt`);
+		this.logger = fs.createWriteStream(`data/${getDate()}/${this.symbol}_trades.txt`);
 
 		this.prevAskTicker = null;
 		this.prevBuyTicker = null;

@@ -6,7 +6,8 @@ import fs from 'fs';
 import {
 	isBaseEth,
 	msToS,
-	msToMin
+	msToMin,
+	getDate
 } from './Utils.js';
 import TickerData from './data/TickerData.js'
 import TradeSum from './data/TradeSum.js'
@@ -19,6 +20,10 @@ class Tracker {
 	constructor(client) {
 		this.client = client;
 		this.msgBot = new AlertBot();
+		let dataDir = `./data/${getDate()}`;
+		if (!fs.existsSync(dataDir)) {
+			fs.mkdirSync(dataDir);
+		}
 		// this.fStream = fs.createWriteStream('log.txt');
 	}
 
