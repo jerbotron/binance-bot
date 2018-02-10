@@ -15,7 +15,7 @@ import DataEngine from './DataEngine.js'
 import AutoTrader from './AutoTrader.js'
 import AlertBot from './AlertBot'
 
-class Tracker {
+export default class Tracker {
 
 	constructor(client) {
 		this.client = client;
@@ -41,9 +41,8 @@ class Tracker {
 		const de = new DataEngine(symbol, wSize, this.msgBot);
 		const at = new AutoTrader(this.client, symbol, de, this.msgBot);
 		at.start();
-		// const logger = fs.createWriteStream(`logs/${symbol}.txt`);
+		// const logger = fs.createWriteStream(`data/${getDate()}/${symbol}.txt`);
 		this.client.ws.ticker(symbol, ticker => {
-			// console.log(`${msToS(ticker.eventTime)}\t${ticker.bestAsk}\t${ticker.bestBid}\n`);
 			// logger.write(`${msToS(ticker.eventTime)}\t${ticker.bestAsk}\t${ticker.bestBid}\n`);
 			de.enqueue(ticker);
 		});
@@ -127,8 +126,4 @@ class Tracker {
 		let msg = `Time: ${msToS(trade.eventTime)} \tPrice: ${trade.price} \t Size: ${trade.quantity}`;
 		console.log(msg);
 	}
-}
-
-export {
-	Tracker
 }

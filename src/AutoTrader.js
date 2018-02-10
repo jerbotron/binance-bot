@@ -6,27 +6,12 @@ import Rx from 'rxjs/Rx'
 import DataEngine from './DataEngine.js'
 import fs from 'fs';
 import { getDate } from './Utils.js';
-
-const Position = Object.freeze({
-	BUY: 'BUY',
-	SELL: 'SELL',
-	PENDING: 'PENDING'
-});
-
-const OrderStatus = Object.freeze({
-	NEW: 'NEW',
-	PARTIALLY_FILLED: 'PARTIALLY_FILLED',
-	FILLED: 'FILLED',
-	CANCELED: 'CANCELED',
-	REJECTED: 'REJECTED',
-	EXPIRED: 'EXPIRED',
-	ERRORED: 'ERRORED'
-});
-
-const OrderType = Object.freeze({
-	LIMIT: 'LIMIT',
-	MARKET: 'MARKET'
-});
+import { 
+	Position,
+	OrderStatus,
+	OrderType,
+	SymbolDecimals 
+} from './Constants.js'
 
 const ORDER_POLLING_TIMEOUT_MS = 30000;
 const ORDER_POLLING_INTERVAL_MS = 500;
@@ -36,7 +21,7 @@ const TRADE_QTY = 100;
 const FEE_PERCENT = 0.05/100; // Assuming user has BNB in account
 const CANCELED_PARTIAL_FILLED_LIMIT = 0.5;
 
-const IS_SIMULATION = true;			// Switch to turn on/off simulation mode
+const IS_SIMULATION = false;			// Switch to turn on/off simulation mode
 const START_BUYING = false;
 const CANCEL_ON_PARTIAL_FILL = true;
 
@@ -106,11 +91,11 @@ export default class AutoTrader {
 
 				if (this.prevBuyTicker != null) {
 					let floor = x.ema - BOLLINGER_BAND_FACTOR * x.std;
-					let price = increaseLowestDigit(x.ticker.toString());
-					console.log(`${this.position}\t${price}\t${x.ticker}`);
+					let price = increaseLowestDigit(x.ticker.toString(), this.symbol);
+					console.log(`${this.position}\t${x.ticker}\t${price}\t${floor}\t${x.ema}`);
 					if (this.position == Position.BUY && 
-						price >= this.prevBuyTicker && 
-						price > floor &&  
+						x.ticker >= this.prevBuyTicker && 
+						x.ticker > floor &&  
 						price < x.ema)
 					{
 						this.buy(price, this.tradeQty, OrderType.LIMIT);
@@ -137,9 +122,9 @@ export default class AutoTrader {
 
 				if (this.prevAskTicker != null) {
 					let ceil = x.ema + BOLLINGER_BAND_FACTOR * x.std;
-					let price = decreaseLowestDigit(x.ticker.toString());
+					let price = decreaseLowestDigit(x.ticker.toString(), this.symbol);
 					let percentGain = (this.lastBoughtPrice) ? getPercentGain(price, this.lastBoughtPrice, FEE_PERCENT) :  null;
-					console.log(`${this.position}\t${x.ticker}\t${price}\t${this.lastBoughtPrice}\t${percentGain}`);
+					console.log(`${this.position}\t${x.ticker}\t${price}\t${this.lastBoughtPrice}\t${percentGain}\t${x.ema}`);
 					if (this.position == Position.SELL && 
 						price <= this.prevAskTicker &&
 						(percentGain == null || percentGain >= 0.20) && 
@@ -309,20 +294,21 @@ export default class AutoTrader {
 	pollOrderStatus(isOrderFinished, currentPosition, orderId) {
 		let checkCondition = (resolve, reject) => {
 			try {
-				let order = this.getOrder(orderId);
-				if (isOrderFinished(res)) {
-					resolve(res);
-				} else {
-					let book = this.getBook();
-					let shouldCancel = false;
-					// cancel if order is out of top 2 bids/asks
-					if ((currentPosition == Position.BUY && Number(order.price) < Number(book.bids[1].price)) ||
-						(currentPosition == Position.SELL && Number(order.price) > Number(book.asks[1].price))) 
-					{
-						this.cancel(orderId);
+				this.getOrder(orderId).then((order) => {
+					if (isOrderFinished(order)) {
+						resolve(order);
+					} else {
+						this.getBook().then((book) => {
+							// cancel if order is out of top 2 bids/asks
+							if ((currentPosition == Position.BUY && Number(order.price) < Number(book.bids[1].price)) ||
+								(currentPosition == Position.SELL && Number(order.price) > Number(book.asks[1].price))) 
+							{
+								this.cancel(orderId);
+							}
+						});
 					}
 					setTimeout(checkCondition, ORDER_POLLING_INTERVAL_MS, resolve, reject);
-				}
+				});
 			} catch(e) {
 				reject(new Error("Polling errored out: " + e));
 			}
@@ -336,12 +322,12 @@ function getPercentGain(sell, buy, feePercent) {
 }
 
 // n must be a string
-function increaseLowestDigit(n) {
+function increaseLowestDigit(n, symbol) {
+	n = trimTrailingDigits(n, symbol);
 	let d = 1;
 	for (let i = n.length-1; i >= 0; i--) {
 		if (n.charAt(i) == '.') {
 			d = n.length - 1 - i;
-			console.log(i);
 			break;
 		}
 	}
@@ -349,7 +335,8 @@ function increaseLowestDigit(n) {
 }
 
 // n must be a string
-function decreaseLowestDigit(n) {
+function decreaseLowestDigit(n, symbol) {
+	n = trimTrailingDigits(n, symbol);
 	let d = 1;
 	for (let i = n.length-1; i >= 0; i--) {
 		if (n.charAt(i) == '.') {
@@ -358,4 +345,10 @@ function decreaseLowestDigit(n) {
 		}
 	}
 	return (Number(n) - 1/Math.pow(10, d)).toFixed(8);
+}
+
+// n must be a string
+function trimTrailingDigits(n, symbol) {
+	let t = SymbolDecimals[symbol];
+	return Number(n).toFixed(t);
 }
