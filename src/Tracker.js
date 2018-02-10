@@ -29,6 +29,7 @@ export default class Tracker {
 
 	stop() {
 		// this.fStream.end();
+		this.msgBot.exit();
 	}
 
 	trackTrades(products) {

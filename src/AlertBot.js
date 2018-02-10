@@ -40,4 +40,8 @@ export default class AlertBot {
 			this.chat.say(msg);
 		}
 	}
+
+	exit() {
+		this.bot.close();
+	}
 }
