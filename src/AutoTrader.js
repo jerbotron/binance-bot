@@ -22,7 +22,7 @@ const FEE_PERCENT = 0.05/100; // Assuming user has BNB in account
 const CANCELED_PARTIAL_FILLED_LIMIT = 0.5;
 
 const IS_SIMULATION = false;			// Switch to turn on/off simulation mode
-const START_BUYING = true;
+const INITIAL_POSITION = Position.BUY;
 const CANCEL_ON_PARTIAL_FILL = true;
 
 export default class AutoTrader {
@@ -43,11 +43,7 @@ export default class AutoTrader {
 		this.tradeQty = TRADE_QTY;
 		this.isPartiallyFilled = false;
 
-		if (START_BUYING) {
-			this.position = Position.BUY;
-		} else {
-			this.position = Position.SELL;
-		}
+		this.position = INITIAL_POSITION;
 	}
 
 	start() {
@@ -277,7 +273,7 @@ export default class AutoTrader {
 				this.logger.write(`${action}\t${res.time}\t${res.clientOrderId}\t${res.price}\t${res.origQty}\t${res.executedQty}\n`);
 
 				this.position = (currentPosition == Position.BUY) ? Position.SELL : Position.BUY; 
-				this.tradeQty = (res.status == OrderStatus.FILLED) ? TRADE_QTY : res.executedQty;
+				this.tradeQty = (res.status == OrderStatus.FILLED || this.position == INITIAL_POSITION) ? TRADE_QTY : res.executedQty;
 				this.isPartiallyFilled = false;	// reset this flag after we finish an order
 			} else if (res.status == OrderStatus.CANCELED) {
 				// console.log("Back to " + currentPosition);
