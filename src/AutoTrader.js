@@ -10,20 +10,24 @@ import {
 	Position,
 	OrderStatus,
 	OrderType,
-	SymbolDecimals 
+	FilterType
 } from './Constants.js'
 
 const ORDER_POLLING_TIMEOUT_MS = 30000;
 const ORDER_POLLING_INTERVAL_MS = 500;
 
 const BOLLINGER_BAND_FACTOR = 2;
-const TRADE_QTY = 100;
-const FEE_PERCENT = 0.05/100; // Assuming user has BNB in account
-const CANCELED_PARTIAL_FILLED_LIMIT = 0.5;
+const FEE_PERCENT = 0.015/100; 			// Assuming user has BNB in account
 
-const IS_SIMULATION = false;			// Switch to turn on/off simulation mode
-const INITIAL_POSITION = Position.BUY;
-const CANCEL_ON_PARTIAL_FILL = true;
+
+/**************************************/
+/** EDIT PARAMS BELOW BEFORE TRADING **/
+/**************************************/
+const IS_SIMULATION = false;
+const INITIAL_POSITION = Position.SELL;
+const MIN_PERCENT_GAIN = 0.30;
+const TRADE_QTY = 10;
+/**************************************/
 
 export default class AutoTrader {
 
@@ -43,7 +47,30 @@ export default class AutoTrader {
 		this.tradeQty = TRADE_QTY;
 		this.isPartiallyFilled = false;
 
-		this.position = INITIAL_POSITION;
+		this._MIN_TICK = null;
+		this._MIN_NOTIONAL = null;
+
+		this.initTradeInfo();
+	}
+
+	initTradeInfo() {
+		this.exchangeInfo().then(res => {
+			res.symbols.forEach(product => {
+			if (product.symbol == this.symbol) {
+				product.filters.forEach(filter => {
+					if (filter.FilterType == FilterType.PRICE_FILTER) {
+						this._MIN_TICK = Number(filter.tickSize);
+					} 
+					else if (filter.FilterType == FilterType.MIN_NOTIONAL) {
+						this._MIN_NOTIONAL = Number(fitler.minNotional);
+					}
+				});
+				console.log(this._MIN_TICK + " , " + this._MIN_NOTIONAL);
+				break;
+			}
+			// this starts trade subscribers from actually trading
+			this.position = INITIAL_POSITION;
+		});
 	}
 
 	start() {
@@ -87,7 +114,7 @@ export default class AutoTrader {
 
 				if (this.prevBuyTicker != null) {
 					let floor = x.ma - BOLLINGER_BAND_FACTOR * x.std;
-					let price = increaseLowestDigit(x.ticker.toString(), this.symbol);
+					let price = x.ticker + this._MIN_TICK;
 					console.log(`${this.position}\t${x.ticker}\t${price}\t${floor}\t${x.ma}`);
 					if (this.position == Position.BUY && 
 						x.ticker >= this.prevBuyTicker && 
@@ -118,12 +145,12 @@ export default class AutoTrader {
 
 				if (this.prevAskTicker != null) {
 					let ceil = x.ma + BOLLINGER_BAND_FACTOR * x.std;
-					let price = decreaseLowestDigit(x.ticker.toString(), this.symbol);
+					let price = x.ticker - this._MIN_TICK;
 					let percentGain = (this.lastBoughtPrice) ? getPercentGain(price, this.lastBoughtPrice, FEE_PERCENT) :  null;
 					console.log(`${this.position}\t${x.ticker}\t${price}\t${this.lastBoughtPrice}\t${percentGain}\t${x.ma}`);
 					if (this.position == Position.SELL && 
 						price <= this.prevAskTicker &&
-						(percentGain == null || percentGain >= 0.20) && 
+						(percentGain == null || percentGain >= MIN_PERCENT_GAIN) && 
 						price > x.ma) 
 					{
 						this.sell(price, this.tradeQty, OrderType.LIMIT);
@@ -225,7 +252,33 @@ export default class AutoTrader {
 			return await this.client.book({symbol: this.symbol});
 		} catch(e) {
 			console.log(e);
-			this.msgBot.say("Errored in getBook()");	
+			this.msgBot.say("Errored in getBook()");
+		}
+	}
+
+	async getExchangeInfo() {
+		try {
+			return await this.client.exchangeInfo();
+		} catch(e) {
+			console.log(e);
+			this.msgBot.say("Errored in getExchangeInfo()");
+		}
+	}
+
+	async orderTest(price, qty, type = OrderType.LIMIT) {
+		try {
+			let order = {
+				symbol: this.symbol,
+				side: 'SELL',
+				type: type,
+				quantity: qty
+			}
+			if (type == OrderType.LIMIT) {
+				order.price = price;
+			}
+			return await this.client.orderTest(order);
+		} catch(e) {
+			console.log(e);
 		}
 	}
 
@@ -272,8 +325,12 @@ export default class AutoTrader {
 				let action = (res.side == Position.BUY) ? "BOUGHT" : "SOLD";
 				this.logger.write(`${action}\t${res.time}\t${res.clientOrderId}\t${res.price}\t${res.origQty}\t${res.executedQty}\n`);
 
+				// reset trade variables
+				let notional = Number(res.executedQty) * Number(res.price);
 				this.position = (currentPosition == Position.BUY) ? Position.SELL : Position.BUY; 
-				this.tradeQty = (res.status == OrderStatus.FILLED || this.position == INITIAL_POSITION) ? TRADE_QTY : res.executedQty;
+				this.tradeQty = (res.status == OrderStatus.FILLED || 
+								 this.position == INITIAL_POSITION ||
+								 notional < this._MIN_NOTIONAL) ? TRADE_QTY : res.executedQty;
 				this.isPartiallyFilled = false;	// reset this flag after we finish an order
 			} else if (res.status == OrderStatus.CANCELED) {
 				// console.log("Back to " + currentPosition);
@@ -319,7 +376,6 @@ function getPercentGain(sell, buy, feePercent) {
 
 // n must be a string
 function increaseLowestDigit(n, symbol) {
-	n = trimTrailingDigits(n, symbol);
 	let d = 1;
 	for (let i = n.length-1; i >= 0; i--) {
 		if (n.charAt(i) == '.') {
@@ -332,7 +388,6 @@ function increaseLowestDigit(n, symbol) {
 
 // n must be a string
 function decreaseLowestDigit(n, symbol) {
-	n = trimTrailingDigits(n, symbol);
 	let d = 1;
 	for (let i = n.length-1; i >= 0; i--) {
 		if (n.charAt(i) == '.') {
@@ -341,10 +396,4 @@ function decreaseLowestDigit(n, symbol) {
 		}
 	}
 	return (Number(n) - 1/Math.pow(10, d)).toFixed(8);
-}
-
-// n must be a string
-function trimTrailingDigits(n, symbol) {
-	let t = SymbolDecimals[symbol];
-	return Number(n).toFixed(t);
 }

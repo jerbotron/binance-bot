@@ -9,7 +9,7 @@ import StatData from './data/StatData.js'
 import { getDate } from './Utils.js';
 
 const BOLLINGER_BAND_FACTOR = 2;
-const USE_SMA = true;
+const USE_SMA = false;
 
 /*
 	Collect data for a single coin ticker, analyze the data in real time and 

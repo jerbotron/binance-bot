@@ -23,10 +23,10 @@ const OrderType = Object.freeze({
 	MARKET: 'MARKET'
 });
 
-// number of decimal places Binance allows order prices to have up to 
-const SymbolDecimals = Object.freeze({
-	'VENBNB': 4,
-	'BNBUSDT': 4
+const FilterType = Object.freeze({
+	PRICE_FILTER: 'PRICE_FILTER',
+	LOT_SIZE: 'LOT_SIZE',
+	MIN_NOTIONAL: 'MIN_NOTIONAL'
 });
 
 export {

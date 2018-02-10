@@ -3,6 +3,8 @@
 "use strict";
 
 import Tracker from './src/Tracker'
+import AlertBot from './src/AlertBot'
+import AutoTrader from './src/AutoTrader'
 import { app } from './src/Webhook'
 
 import Binance from 'binance-api-node'
@@ -16,7 +18,8 @@ const client = Binance({
 
 app.listen(8080, () => console.log('Jerbotron webhook listening on port 8080...'));
 
-const tracker = new Tracker(client);
+const msgBot = new AlertBot();
+const tracker = new Tracker(client, msgBot);
 
 // tracker.trackAllEth(1, 3);
 tracker.trackTicker('VENBNB', 300);

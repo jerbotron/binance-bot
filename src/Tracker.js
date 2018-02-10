@@ -13,13 +13,12 @@ import TickerData from './data/TickerData.js'
 import TradeSum from './data/TradeSum.js'
 import DataEngine from './DataEngine.js'
 import AutoTrader from './AutoTrader.js'
-import AlertBot from './AlertBot'
 
 export default class Tracker {
 
-	constructor(client) {
+	constructor(client, msgBot) {
 		this.client = client;
-		this.msgBot = new AlertBot();
+		this.msgBot = msgBot;
 		let dataDir = `./data/${getDate()}`;
 		if (!fs.existsSync(dataDir)) {
 			fs.mkdirSync(dataDir);
