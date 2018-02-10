@@ -4,9 +4,9 @@
 
 export default class StatData {
 
-	constructor(ticker, ema, std) {
+	constructor(ticker, ma, std) {
 		this._ticker = ticker;
-		this._ema = ema;
+		this._ma = ma;
 		this._std = std;
 	}
 
@@ -14,8 +14,8 @@ export default class StatData {
 		return this._ticker;
 	}
 
-	get ema() {
-		return this._ema;
+	get ma() {
+		return this._ma;
 	}
 
 	get std() {

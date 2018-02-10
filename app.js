@@ -20,6 +20,7 @@ const tracker = new Tracker(client);
 
 // tracker.trackAllEth(1, 3);
 tracker.trackTicker('VENBNB', 300);
+// tracker.trackTicker('BNBUSDT', 300);
 
 process.on("SIGINT", () => {
 	tracker.stop();

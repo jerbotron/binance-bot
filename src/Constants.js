@@ -25,7 +25,8 @@ const OrderType = Object.freeze({
 
 // number of decimal places Binance allows order prices to have up to 
 const SymbolDecimals = Object.freeze({
-	'VENBNB': 4
+	'VENBNB': 4,
+	'BNBUSDT': 4
 });
 
 export {

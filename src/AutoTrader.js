@@ -22,7 +22,7 @@ const FEE_PERCENT = 0.05/100; // Assuming user has BNB in account
 const CANCELED_PARTIAL_FILLED_LIMIT = 0.5;
 
 const IS_SIMULATION = false;			// Switch to turn on/off simulation mode
-const START_BUYING = false;
+const START_BUYING = true;
 const CANCEL_ON_PARTIAL_FILL = true;
 
 export default class AutoTrader {
@@ -90,13 +90,13 @@ export default class AutoTrader {
 				}
 
 				if (this.prevBuyTicker != null) {
-					let floor = x.ema - BOLLINGER_BAND_FACTOR * x.std;
+					let floor = x.ma - BOLLINGER_BAND_FACTOR * x.std;
 					let price = increaseLowestDigit(x.ticker.toString(), this.symbol);
-					console.log(`${this.position}\t${x.ticker}\t${price}\t${floor}\t${x.ema}`);
+					console.log(`${this.position}\t${x.ticker}\t${price}\t${floor}\t${x.ma}`);
 					if (this.position == Position.BUY && 
 						x.ticker >= this.prevBuyTicker && 
 						x.ticker > floor &&  
-						price < x.ema)
+						price < x.ma)
 					{
 						this.buy(price, this.tradeQty, OrderType.LIMIT);
 					}
@@ -121,14 +121,14 @@ export default class AutoTrader {
 				}
 
 				if (this.prevAskTicker != null) {
-					let ceil = x.ema + BOLLINGER_BAND_FACTOR * x.std;
+					let ceil = x.ma + BOLLINGER_BAND_FACTOR * x.std;
 					let price = decreaseLowestDigit(x.ticker.toString(), this.symbol);
 					let percentGain = (this.lastBoughtPrice) ? getPercentGain(price, this.lastBoughtPrice, FEE_PERCENT) :  null;
-					console.log(`${this.position}\t${x.ticker}\t${price}\t${this.lastBoughtPrice}\t${percentGain}\t${x.ema}`);
+					console.log(`${this.position}\t${x.ticker}\t${price}\t${this.lastBoughtPrice}\t${percentGain}\t${x.ma}`);
 					if (this.position == Position.SELL && 
 						price <= this.prevAskTicker &&
 						(percentGain == null || percentGain >= 0.20) && 
-						price > x.ema) 
+						price > x.ma) 
 					{
 						this.sell(price, this.tradeQty, OrderType.LIMIT);
 					}
@@ -280,7 +280,7 @@ export default class AutoTrader {
 				this.tradeQty = (res.status == OrderStatus.FILLED) ? TRADE_QTY : res.executedQty;
 				this.isPartiallyFilled = false;	// reset this flag after we finish an order
 			} else if (res.status == OrderStatus.CANCELED) {
-				console.log("Back to " + currentPosition);
+				// console.log("Back to " + currentPosition);
 				this.position = currentPosition;
 			}
 		})
@@ -305,9 +305,9 @@ export default class AutoTrader {
 							{
 								this.cancel(orderId);
 							}
+							setTimeout(checkCondition, ORDER_POLLING_INTERVAL_MS, resolve, reject);
 						});
 					}
-					setTimeout(checkCondition, ORDER_POLLING_INTERVAL_MS, resolve, reject);
 				});
 			} catch(e) {
 				reject(new Error("Polling errored out: " + e));
