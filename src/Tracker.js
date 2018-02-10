@@ -19,7 +19,7 @@ export default class Tracker {
 	constructor(client, msgBot) {
 		this.client = client;
 		this.msgBot = msgBot;
-		let dataDir = `./data/${getDate()}`;
+		let dataDir = `./logs/${getDate()}`;
 		if (!fs.existsSync(dataDir)) {
 			fs.mkdirSync(dataDir);
 		}
@@ -41,7 +41,7 @@ export default class Tracker {
 		const de = new DataEngine(symbol, wSize, this.msgBot);
 		const at = new AutoTrader(this.client, symbol, de, this.msgBot);
 		at.start();
-		// const logger = fs.createWriteStream(`data/${getDate()}/${symbol}.txt`);
+		// const logger = fs.createWriteStream(`logs/${getDate()}/${symbol}.txt`);
 		this.client.ws.ticker(symbol, ticker => {
 			// logger.write(`${msToS(ticker.eventTime)}\t${ticker.bestAsk}\t${ticker.bestBid}\n`);
 			de.enqueue(ticker);

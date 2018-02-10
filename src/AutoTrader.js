@@ -36,7 +36,7 @@ export default class AutoTrader {
 		this.dataEngine = dataEngine;
 		this.msgBot = msgBot;
 		this.client = client;
-		this.logger = fs.createWriteStream(`data/${getDate()}/${this.symbol}_trades.txt`);
+		this.logger = fs.createWriteStream(`logs/${getDate()}/${this.symbol}_trades.txt`);
 
 		this.prevAskTicker = null;
 		this.prevBuyTicker = null;

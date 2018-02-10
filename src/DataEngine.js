@@ -25,7 +25,7 @@ export default class DataEngine {
 		this.dataArr = new Array(wSize);
 		this.ma = [null, null];	// size 2 array [askMa, bidMa]
 		this.std = [null, null];	// size 2 array [askStd, bidStd]
-		this.logger = fs.createWriteStream(`data/${getDate()}/${this.symbol}_stats.txt`);
+		this.logger = fs.createWriteStream(`logs/${getDate()}/${this.symbol}_stats.txt`);
 		this.count = 0;
 
 		this.askSubject = new Rx.Subject();
