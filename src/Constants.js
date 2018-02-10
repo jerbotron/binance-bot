@@ -33,5 +33,5 @@ export {
 	Position,
 	OrderStatus,
 	OrderType,
-	SymbolDecimals
+	FilterType
 }

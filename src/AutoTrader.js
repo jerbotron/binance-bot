@@ -24,8 +24,8 @@ const FEE_PERCENT = 0.015/100; 			// Assuming user has BNB in account
 /** EDIT PARAMS BELOW BEFORE TRADING **/
 /**************************************/
 const IS_SIMULATION = false;
-const INITIAL_POSITION = Position.SELL;
-const MIN_PERCENT_GAIN = 0.30;
+const INITIAL_POSITION = Position.BUY;
+const MIN_PERCENT_GAIN = 0.25;
 const TRADE_QTY = 10;
 /**************************************/
 
@@ -54,21 +54,20 @@ export default class AutoTrader {
 	}
 
 	initTradeInfo() {
-		this.exchangeInfo().then(res => {
-			res.symbols.forEach(product => {
-			if (product.symbol == this.symbol) {
-				product.filters.forEach(filter => {
-					if (filter.FilterType == FilterType.PRICE_FILTER) {
-						this._MIN_TICK = Number(filter.tickSize);
-					} 
-					else if (filter.FilterType == FilterType.MIN_NOTIONAL) {
-						this._MIN_NOTIONAL = Number(fitler.minNotional);
-					}
-				});
-				console.log(this._MIN_TICK + " , " + this._MIN_NOTIONAL);
-				break;
+		this.getExchangeInfo().then(res => {
+			for (let i = 0; i < res.symbols.length; i++) {
+				if (res.symbols[i].symbol == this.symbol) {
+					res.symbols[i].filters.forEach(filter => {
+						if (filter.filterType == FilterType.PRICE_FILTER) {
+							this._MIN_TICK = Number(filter.tickSize);
+						} 
+						else if (filter.filterType == FilterType.MIN_NOTIONAL) {
+							this._MIN_NOTIONAL = Number(filter.minNotional);
+						}
+					});
+					break;
+				}
 			}
-			// this starts trade subscribers from actually trading
 			this.position = INITIAL_POSITION;
 		});
 	}
