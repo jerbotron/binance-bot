@@ -23,10 +23,10 @@ const client = Binance({
 export const TradeParams = Object.freeze({
 	SYMBOL: 'BNBUSDT',
 	IS_SIMULATION: false,
-	INITIAL_POSITION: Position.BUY,
-	MIN_PERCENT_GAIN: 0.25,
+	INITIAL_POSITION: Position.SELL,
+	MIN_PERCENT_GAIN: 0.20,
 	TRADE_QTY: 10,
-	WINDOW_SIZE_S: 240
+	WINDOW_SIZE_S: 180
 });
 
 const msgBot 		= new AlertBot();
@@ -35,6 +35,7 @@ const tracker 		= new Tracker(client, dataEngine, msgBot);
 const autoTrader 	= new AutoTrader(client, dataEngine, tracker, msgBot);
 
 autoTrader.start();
+console.log(TradeParams);
 
 app.listen(8080, () => console.log('Jerbotron webhook listening on port 8080...'));
 

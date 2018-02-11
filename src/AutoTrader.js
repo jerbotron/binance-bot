@@ -105,18 +105,9 @@ export default class AutoTrader {
 				if (this.position != Position.BUY) {
 					return;
 				}
-
-				if (this.prevBuyTicker != null) {
-					let floor = x.ma - BOLLINGER_BAND_FACTOR * x.std;
-					let price = (x.ticker + this._MIN_TICK).toFixed(this._PRECISION);
-					console.log(`${this.position}\t${x.ticker}\t${price}\t${floor}\t${x.ma}`);
-					if (this.position == Position.BUY && 
-						x.ticker >= this.prevBuyTicker && 
-						x.ticker > floor &&  
-						price < x.ma)
-					{
-						this.buy(price, this.tradeQty, OrderType.LIMIT);
-					}
+				let price = (x.ticker + this._MIN_TICK).toFixed(this._PRECISION);
+				if (this.prevBuyTicker != null && this.shouldBuy_2(x.ticker, price, x.ma, x.std)) {
+					this.buy(price, this.tradeQty, OrderType.LIMIT);
 				}
 				this.prevBuyTicker = x.ticker;
 			},
@@ -130,25 +121,32 @@ export default class AutoTrader {
 		);
 	}
 
+	shouldBuy_1(ticker, price, ma, std) {
+		let floor = ma - BOLLINGER_BAND_FACTOR * std;
+		console.log(`${this.position}\t${ticker}\t${price}\t${floor}\t${ma}`);
+		return this.position == Position.BUY && 
+				ticker >= this.prevBuyTicker && 
+				ticker > floor &&  
+				price < ma;
+	}
+
+	shouldBuy_2(ticker, price, ma, std) {
+		let floor = ma - BOLLINGER_BAND_FACTOR * std;
+		console.log(`${this.position}\t${ticker}\t${price}\t${floor}\t${ma-std}`);
+		return this.position == Position.BUY && 
+				ticker > floor &&  
+				price < (ma - std);
+	}
+
 	autoSell() {
 		return Rx.Subscriber.create(
 			x => {
 				if (this.position != Position.SELL) {
 					return;
 				}
-
-				if (this.prevAskTicker != null) {
-					let ceil = x.ma + BOLLINGER_BAND_FACTOR * x.std;
-					let price = (x.ticker - this._MIN_TICK).toFixed(this._PRECISION);
-					let percentGain = (this.lastBoughtPrice) ? getPercentGain(price, this.lastBoughtPrice, FEE_PERCENT) :  null;
-					console.log(`${this.position}\t${x.ticker}\t${price}\t${this.lastBoughtPrice}\t${percentGain}\t${x.ma}`);
-					if (this.position == Position.SELL && 
-						price <= this.prevAskTicker &&
-						(percentGain == null || percentGain >= TradeParams.MIN_PERCENT_GAIN) && 
-						price > x.ma) 
-					{
-						this.sell(price, this.tradeQty, OrderType.LIMIT);
-					}
+				let price = (x.ticker - this._MIN_TICK).toFixed(this._PRECISION);
+				if (this.prevAskTicker != null && this.shouldSell_2(x.ticker, price, x.ma, x.std)) {
+					this.sell(price, this.tradeQty, OrderType.LIMIT);
 				}
 				this.prevAskTicker = x.ticker;
 			},
@@ -160,6 +158,25 @@ export default class AutoTrader {
 				console.log('onCompleted');
 			}
 		);
+	}
+
+	shouldSell_1(ticker, price, ma, std) {
+		let ceil = ma + BOLLINGER_BAND_FACTOR * std;
+		let percentGain = (this.lastBoughtPrice) ? getPercentGain(price, this.lastBoughtPrice, FEE_PERCENT) :  null;
+		console.log(`${this.position}\t${ticker}\t${price}\t${this.lastBoughtPrice}\t${percentGain}\t${ma}`);
+		return this.position == Position.SELL && 
+				price <= this.prevAskTicker && 
+				(percentGain == null || percentGain >= TradeParams.MIN_PERCENT_GAIN) && 
+				price > ma;
+	}
+
+	shouldSell_2(ticker, price, ma, std) {
+		let ceil = ma + BOLLINGER_BAND_FACTOR * std;
+		let percentGain = (this.lastBoughtPrice) ? getPercentGain(price, this.lastBoughtPrice, FEE_PERCENT) :  null;
+		console.log(`${this.position}\t${ticker}\t${price}\t${this.lastBoughtPrice}\t${percentGain}\t${ma+std}`);
+		return this.position == Position.SELL && 
+				(percentGain == null || percentGain >= TradeParams.MIN_PERCENT_GAIN) && 
+				price > ma + std;
 	}
 
 	async sell(price, qty, type = OrderType.MARKET) {
@@ -192,7 +209,7 @@ export default class AutoTrader {
 	async buy(price, qty, type = OrderType.MARKET) {
 		console.log(`Executing BUY of ${this.symbol} at ${price} of ${qty} shares`);
 		this.msgBot.say(`Executing BUY of ${this.symbol} at ${price} of ${qty} shares`);
-		if (IS_SIMULATION) {
+		if (TradeParams.IS_SIMULATION) {
 			this.position = Position.SELL;
 			return;
 		}
@@ -259,6 +276,15 @@ export default class AutoTrader {
 		}
 	}
 
+	async getAccountInfo() {
+		try {
+			return await this.client.accountInfo();
+		} catch(e) {
+			console.log(e);
+			this.msgBot.say("Errored in getAccountInfo()");
+		}
+	}
+
 	async orderTest(price, qty, type = OrderType.LIMIT) {
 		try {
 			let order = {
@@ -321,10 +347,14 @@ export default class AutoTrader {
 
 				// reset trade variables
 				let notional = Number(res.executedQty) * Number(res.price);
-				this.position = (currentPosition == Position.BUY) ? Position.SELL : Position.BUY; 
-				this.tradeQty = (res.status == OrderStatus.FILLED || 
-								 this.position == TradeParams.INITIAL_POSITION ||
-								 notional < this._MIN_NOTIONAL) ? TradeParams.TRADE_QTY : res.executedQty;
+
+				if (res.status == OrderStatus.FILLED) {
+					this.tradeQty = TradeParams.TRADE_QTY;
+					this.position = (currentPosition == Position.BUY) ? Position.SELL : Position.BUY;
+				} else {
+					this.tradeQty -= Number(res.executedQty);
+					this.position = currentPosition;
+				}
 				this.isPartiallyFilled = false;	// reset this flag after we finish an order
 			} else if (res.status == OrderStatus.CANCELED) {
 				// console.log("Back to " + currentPosition);
