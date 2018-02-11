@@ -5,9 +5,9 @@
 export default class StatData {
 
 	constructor(ticker, ma, std) {
-		this._ticker = ticker;
-		this._ma = ma;
-		this._std = std;
+		this._ticker = Number(ticker);
+		this._ma = Number(ma);
+		this._std = Number(std);
 	}
 
 	get ticker() {

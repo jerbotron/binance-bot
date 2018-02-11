@@ -7,6 +7,7 @@ import Rx from 'rxjs/Rx';
 import TickerSum from './data/TickerSum.js'
 import StatData from './data/StatData.js'
 import { getDate } from './Utils.js';
+import { TradeParams } from '../app.js'
 
 const BOLLINGER_BAND_FACTOR = 2;
 const USE_SMA = false;
@@ -17,12 +18,12 @@ const USE_SMA = false;
 */
 export default class DataEngine {
 
-	constructor(symbol, wSize, msgBot) {
-		this.symbol = symbol;
-		this.wSize = wSize;
+	constructor(msgBot) {
+		this.symbol = TradeParams.SYMBOL;
+		this.wSize = TradeParams.WINDOW_SIZE_S;
 		this.msgBot = msgBot;
 		this.startTimestamp = null;
-		this.dataArr = new Array(wSize);
+		this.dataArr = new Array(this.wSize);
 		this.ma = [null, null];	// size 2 array [askMa, bidMa]
 		this.std = [null, null];	// size 2 array [askStd, bidStd]
 		this.logger = fs.createWriteStream(`logs/${getDate()}/${this.symbol}_stats.txt`);
