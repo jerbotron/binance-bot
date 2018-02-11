@@ -22,11 +22,11 @@ class DataPlotter {
 
 		this.lineReader = require("readline").createInterface({
 			// input: require("fs").createReadStream(`./data/${getDate()}/VENBNB_stats.txt`)
-			input: require("fs").createReadStream("./data/02_07_18/VENBNB_stats.txt")
+			input: require("fs").createReadStream("./data/temp.txt")
 		});
 
 		this.lineReader.on("close", () => {
-			this.plot("VENBNB");
+			this.plot("ETHUSDT");
 		});
 	}
 
@@ -42,7 +42,9 @@ class DataPlotter {
 			this.bidData.getFloorTrace("Bid Floor"),
 			this.bidData.getCeilTrace("Bid Ceil"),
 			this.tradeData.getSellTrace(),
-			this.tradeData.getBuyTrace()
+			this.tradeData.getSoldTrace(),
+			this.tradeData.getBuyTrace(),
+			this.tradeData.getBoughtTrace(),
 		];
 
 		plotly.plot(plotData, options, function(err, msg) {
@@ -61,8 +63,8 @@ class DataPlotter {
 	// stats_data colunmns:
 	// timestamp   bestAsk   bestBid   askEma   bidEma   askStd   bidStd
 	processStatDataRow(row) {
-		if (row[1] == 'SELL' || row[1] == 'BUY') {
-			this.tradeData.append(row[0], row[1], row[2]);
+		if (row[0] == 'SELL' || row[0] == 'BUY' || row[0] == 'SOLD' || row[0] == 'BOUGHT') {
+			this.tradeData.append(row[0], row[1], row[3]);
 		} else {
 			this.askData.append(row[0], row[1], row[3], row[5]);
 			this.bidData.append(row[0], row[2], row[4], row[6]);
@@ -170,15 +172,25 @@ class TradeData {
 		this.sellTime = [];
 		this.buyData = [];
 		this.buyTime = [];
+		this.soldData = [];
+		this.soldTime = [];
+		this.boughtData = [];
+		this.boughtTime = [];
 	}
 
-	append(timestamp, orderType, price) {
+	append(orderType, timestamp, price) {
 		if (orderType == 'SELL') {
 			this.sellData.push(Number(price));
 			this.sellTime.push(Number(timestamp));
 		} else if (orderType == 'BUY') {
 			this.buyData.push(Number(price));
 			this.buyTime.push(Number(timestamp));
+		} else if (orderType == 'SOLD') {
+			this.soldData.push(Number(price));
+			this.soldTime.push(Number(timestamp));
+		} else if (orderType == 'BOUGHT') {
+			this.boughtData.push(Number(price));
+			this.boughtTime.push(Number(timestamp));
 		}
 	}
 
@@ -204,6 +216,40 @@ class TradeData {
 			x: this.buyTime,
 			y: this.buyData,
 			name: "Buy Markers",
+			type: "scatter",
+			mode: "markers",
+			marker: {
+				size: 12,
+			    line: {
+			    	color: "white",
+			    	width: 0.5
+			    }
+			}
+		}
+	}
+
+	getSoldTrace() {
+		return {
+			x: this.soldTime,
+			y: this.soldData,
+			name: "Sold Markers",
+			type: "scatter",
+			mode: "markers",
+			marker: {
+				size: 12,
+			    line: {
+			    	color: "white",
+			    	width: 0.5
+			    }
+			}
+		}
+	}
+
+	getBoughtTrace() {
+		return {
+			x: this.boughtTime,
+			y: this.boughtData,
+			name: "Bought Markers",
 			type: "scatter",
 			mode: "markers",
 			marker: {
