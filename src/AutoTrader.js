@@ -136,6 +136,7 @@ export default class AutoTrader {
 				let price = Number((x.ticker + this._MIN_TICK).toFixed(this._PRECISION));
 				if (this.prevBuyTicker != null && this.shouldBuy_2(x.ticker, price, x.ma, x.std)) {
 					let maxQty = Number((this.quoteBalance.qty / price).toFixed(this._PRECISION));
+					console.log(this.tradeQty + " , " + maxQty);
 					this.tradeQty = (this.tradeQty > maxQty) ? maxQty : this.tradeQty;
 					if (this.isBelowMinimumNotional(this.tradeQty, price)) {
 						this.position = Position.SELL;
@@ -180,6 +181,7 @@ export default class AutoTrader {
 				}
 				let price = Number((x.ticker - this._MIN_TICK).toFixed(this._PRECISION));
 				if (this.prevAskTicker != null && this.shouldSell_2(x.ticker, price, x.ma, x.std)) {
+					console.log(this.tradeQty + " , " + this.baseBalance._qty);
 					this.tradeQty = (this.tradeQty > this.baseBalance.qty) ? this.baseBalance.qty : this.tradeQty;
 					if (this.isBelowMinimumNotional(this.tradeQty, price)) {
 						this.position = Position.BUY;
@@ -202,7 +204,7 @@ export default class AutoTrader {
 	shouldSell_1(ticker, price, ma, std) {
 		let ceil = ma + BOLLINGER_BAND_FACTOR * std;
 		let percentGain = (this.lastBoughtPrice) ? getPercentGain(price, this.lastBoughtPrice, FEE_PERCENT) :  null;
-		console.log(`${this.position}\t${ticker}\t${price}\t${this.lastBoughtPrice}\t${percentGain}\t${ma}`);
+		console.log(`${this.position}\t${ticker}\t${price}\t${this.lastBoughtPrice}\t${percentGain}\t${ma}\t${this.tradeQty}`);
 		return this.position == Position.SELL && 
 				price <= this.prevAskTicker && 
 				(percentGain == null || percentGain >= TradeParams.MIN_PERCENT_GAIN) && 
@@ -212,13 +214,14 @@ export default class AutoTrader {
 	shouldSell_2(ticker, price, ma, std) {
 		let ceil = ma + BOLLINGER_BAND_FACTOR * std;
 		let percentGain = (this.lastBoughtPrice) ? getPercentGain(price, this.lastBoughtPrice, FEE_PERCENT) :  null;
-		console.log(`${this.position}\t${ticker}\t${price}\t${this.lastBoughtPrice}\t${percentGain}\t${ma+std}`);
+		console.log(`${this.position}\t${ticker}\t${price}\t${this.lastBoughtPrice}\t${percentGain}\t${ma+std}\t${this.tradeQty}`);
 		return this.position == Position.SELL && 
 				(percentGain == null || percentGain >= TradeParams.MIN_PERCENT_GAIN) && 
 				price > ma + std;
 	}
 
 	isBelowMinimumNotional(qty, price) {
+		console.log(Number((qty*price).toFixed(this._PRECISION)) + " < " + this._MIN_NOTIONAL);
 		if (Number((qty*price).toFixed(this._PRECISION)) < this._MIN_NOTIONAL) {
 			console.log("Changing position due to minimum notional");
 			this.msgBot.say("Changing position due to minimum notional");
@@ -374,11 +377,11 @@ export default class AutoTrader {
 					msg = `Bought ${res.executedQty} of ${res.symbol} @ ${res.price}`;
 					this.lastBoughtPrice = Number(res.price);
 					this.baseBalance.addQty(res.executedQty);
-					this.quoteBalance.subtractQty(res.executedQty);
+					this.quoteBalance.subtractQty(Number(res.executedQty) * Number(res.price));
 				} else if (res.side == Position.SELL) {
 					msg = `Sold ${res.executedQty} of ${res.symbol} @ ${res.price}`;
 					this.baseBalance.subtractQty(res.executedQty);
-					this.quoteBalance.subtractQty(res.executedQty);
+					this.quoteBalance.addQty(Number(res.executedQty) * Number(res.price));
 					if (this.lastBoughtPrice) {
 						let percentChange = getPercentGain(res.price, this.lastBoughtPrice, FEE_PERCENT);
 						this.cumulativeGain *= (1 + percentChange/100);

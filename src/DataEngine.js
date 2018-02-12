@@ -41,7 +41,7 @@ export default class DataEngine {
 		this.dataArr[this.count % this.wSize] = new Ticker(ticker.bestAsk, ticker.bestBid);
 		this.count++;
 		if (this.count >= this.wSize) {
-			if (this.count == 2*this.wSize) {
+			if (this.count == this.wSize) {
 				console.log("Trading began");
 				this.msgBot.say("Trading began");
 			}
@@ -57,10 +57,8 @@ export default class DataEngine {
 		let u = this.calcAvg();
 		this.ma = (USE_SMA || (this.ma[0] == null || this.ma[1] == null)) ? u : this.calcEma(ticker.bestAsk, ticker.bestBid);
 		this.std = this.calcStd(u);
-		if (this.count >= 2 * this.wSize) {
-			this.askSubject.next(new StatData(ticker.bestAsk, this.ma[0], this.std[0]));
-			this.buySubject.next(new StatData(ticker.bestBid, this.ma[1], this.std[1]));
-		}
+		this.askSubject.next(new StatData(ticker.bestAsk, this.ma[0], this.std[0]));
+		this.buySubject.next(new StatData(ticker.bestBid, this.ma[1], this.std[1]));
 	}
 
 	alertAskPrice() {

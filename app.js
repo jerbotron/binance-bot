@@ -24,10 +24,10 @@ const client = Binance({
 export const TradeParams = Object.freeze({
 	SYMBOL: 'BNBUSDT',
 	IS_SIMULATION: false,
-	INITIAL_POSITION: Position.BUY,
+	INITIAL_POSITION: Position.SELL,
 	MIN_PERCENT_GAIN: 0.20,
-	TRADE_QTY: 50,
-	WINDOW_SIZE_S: 120
+	TRADE_QTY: 25,
+	WINDOW_SIZE_S: 90
 });
 
 const msgBot 		= new AlertBot();
