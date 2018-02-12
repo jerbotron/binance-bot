@@ -66,17 +66,17 @@ export default class AutoTrader {
 		for (let i = 0; i < symbols.length; i++) {
 			if (symbols[i].symbol == this.symbol) {
 				this._BASE = symbols[i].baseAsset;
-				this._QUOTE = symbols[i].quoateAsset;
+				this._QUOTE = symbols[i].quoteAsset;
 				this._PRECISION = Number(symbols[i].baseAssetPrecision);
 				symbols[i].filters.forEach(filter => {
 					if (filter.filterType == FilterType.PRICE_FILTER) {
-						this._MIN_TICK = Number(filter.tickSize).toFixed(8);
+						this._MIN_TICK = Number(Number(filter.tickSize).toFixed(8));
 					}
 					else if (filter.filterType == FilterType.LOT_SIZE) {
-						this._MIN_QTY = Number(filter.minQty).toFixed(8);
+						this._MIN_QTY = Number(Number(filter.minQty).toFixed(8));
 					} 
 					else if (filter.filterType == FilterType.MIN_NOTIONAL) {
-						this._MIN_NOTIONAL = Number(filter.minNotional).toFixed(8);
+						this._MIN_NOTIONAL = Number(Number(filter.minNotional).toFixed(8));
 					}
 				});
 				break;
@@ -133,9 +133,9 @@ export default class AutoTrader {
 				if (this.position != Position.BUY) {
 					return;
 				}
-				let price = (x.ticker + this._MIN_TICK).toFixed(this._PRECISION);
+				let price = Number((x.ticker + this._MIN_TICK).toFixed(this._PRECISION));
 				if (this.prevBuyTicker != null && this.shouldBuy_2(x.ticker, price, x.ma, x.std)) {
-					let maxQty = (this.quoteBalance.qty / price).toFixed(this._PRECISION);
+					let maxQty = Number((this.quoteBalance.qty / price).toFixed(this._PRECISION));
 					this.tradeQty = (this.tradeQty > maxQty) ? maxQty : this.tradeQty;
 					if (this.isBelowMinimumNotional(this.tradeQty, price)) {
 						this.position = Position.SELL;
@@ -178,7 +178,7 @@ export default class AutoTrader {
 				if (this.position != Position.SELL) {
 					return;
 				}
-				let price = (x.ticker - this._MIN_TICK).toFixed(this._PRECISION);
+				let price = Number((x.ticker - this._MIN_TICK).toFixed(this._PRECISION));
 				if (this.prevAskTicker != null && this.shouldSell_2(x.ticker, price, x.ma, x.std)) {
 					this.tradeQty = (this.tradeQty > this.baseBalance.qty) ? this.baseBalance.qty : this.tradeQty;
 					if (this.isBelowMinimumNotional(this.tradeQty, price)) {
@@ -219,7 +219,7 @@ export default class AutoTrader {
 	}
 
 	isBelowMinimumNotional(qty, price) {
-		if ((qty*price).toFixed(this._PRECISION) < this._MIN_NOTIONAL) {
+		if (Number((qty*price).toFixed(this._PRECISION)) < this._MIN_NOTIONAL) {
 			console.log("Changing position due to minimum notional");
 			this.msgBot.say("Changing position due to minimum notional");
 			return true;

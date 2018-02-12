@@ -6,8 +6,8 @@ export default class Balance {
 
 	constructor(symbol, qty) {
 		this._symbol = symbol;
-		this._qty = Number(qty).toFixed(8);
-		this._orig_qty = qty;
+		this._qty = Number(qty);
+		this._orig_qty = Number(qty);
 	}
 
 	get symbol() {
@@ -23,14 +23,14 @@ export default class Balance {
 	}
 
 	get percentChange() {
-		return (this._qty / this._orig_qty).toFixed(8) - 1;
+		return (this._qty / this._orig_qty) - 1;
 	}
 
 	addQty(qty) {
-		this._qty += Number(qty).toFixed(8);
+		this._qty += Number(qty);
 	}
 
 	subtractQty(qty) {
-		this._qty -= Number(qty).toFixed(8);
+		this._qty -= Number(qty);
 	}
 }
