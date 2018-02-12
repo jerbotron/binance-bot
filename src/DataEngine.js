@@ -50,7 +50,7 @@ export default class DataEngine {
 		}
 		let ceil = [this.ma[0] + BOLLINGER_BAND_FACTOR * this.std[0], this.ma[1] + BOLLINGER_BAND_FACTOR * this.std[1]];
 		let floor = [this.ma[0] - BOLLINGER_BAND_FACTOR * this.std[0], this.ma[1] - BOLLINGER_BAND_FACTOR * this.std[1]];
-		// console.log(`${ticker.eventTime}\t${ticker.bestAsk}\t${floor[0]}\t${this.ma[0]}\t${ceil[0]}\t${ticker.bestBid.toString()}\t${floor[1]}\t${this.ma[1]}\t${ceil[1]}\n`);
+		console.log(`${ticker.eventTime}\t${ticker.bestAsk}\t${floor[0]}\t${this.ma[0]}\t${ceil[0]}\t${ticker.bestBid.toString()}\t${floor[1]}\t${this.ma[1]}\t${ceil[1]}\n`);
 	}
 
 	calculateStats(ticker) {
