@@ -9,6 +9,7 @@ import AutoTrader from './src/AutoTrader'
 import { Position } from './src/Constants'
 import { app } from './src/Webhook'
 import Binance from 'binance-api-node'
+import winston from 'winston'
 
 const CONFIG = require("./config.json");
 
@@ -23,10 +24,10 @@ const client = Binance({
 export const TradeParams = Object.freeze({
 	SYMBOL: 'BNBUSDT',
 	IS_SIMULATION: false,
-	INITIAL_POSITION: Position.SELL,
+	INITIAL_POSITION: Position.BUY,
 	MIN_PERCENT_GAIN: 0.20,
-	TRADE_QTY: 10,
-	WINDOW_SIZE_S: 180
+	TRADE_QTY: 50,
+	WINDOW_SIZE_S: 120
 });
 
 const msgBot 		= new AlertBot();

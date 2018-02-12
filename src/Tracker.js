@@ -20,10 +20,6 @@ export default class Tracker {
 		this.client = client;
 		this.dataEngine = dataEngine;
 		this.msgBot = msgBot;
-		let dataDir = `./logs/${getDate()}`;
-		if (!fs.existsSync(dataDir)) {
-			fs.mkdirSync(dataDir);
-		}
 		// this.fStream = fs.createWriteStream('log.txt');
 	}
 

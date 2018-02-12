@@ -26,6 +26,10 @@ export default class DataEngine {
 		this.dataArr = new Array(this.wSize);
 		this.ma = [null, null];	// size 2 array [askMa, bidMa]
 		this.std = [null, null];	// size 2 array [askStd, bidStd]
+		let dataDir = `./logs/${getDate()}`;
+		if (!fs.existsSync(dataDir)) {
+			fs.mkdirSync(dataDir);
+		}
 		this.logger = fs.createWriteStream(`logs/${getDate()}/${this.symbol}_stats.txt`);
 		this.count = 0;
 
@@ -37,7 +41,7 @@ export default class DataEngine {
 		this.dataArr[this.count % this.wSize] = new Ticker(ticker.bestAsk, ticker.bestBid);
 		this.count++;
 		if (this.count >= this.wSize) {
-			if (this.count == this.wSize) {
+			if (this.count == 2*this.wSize) {
 				console.log("Trading began");
 				this.msgBot.say("Trading began");
 			}
@@ -53,8 +57,10 @@ export default class DataEngine {
 		let u = this.calcAvg();
 		this.ma = (USE_SMA || (this.ma[0] == null || this.ma[1] == null)) ? u : this.calcEma(ticker.bestAsk, ticker.bestBid);
 		this.std = this.calcStd(u);
-		this.askSubject.next(new StatData(ticker.bestAsk, this.ma[0], this.std[0]));
-		this.buySubject.next(new StatData(ticker.bestBid, this.ma[1], this.std[1]));
+		if (this.count >= 2 * this.wSize) {
+			this.askSubject.next(new StatData(ticker.bestAsk, this.ma[0], this.std[0]));
+			this.buySubject.next(new StatData(ticker.bestBid, this.ma[1], this.std[1]));
+		}
 	}
 
 	alertAskPrice() {

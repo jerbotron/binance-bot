@@ -12,13 +12,14 @@ import {
 	OrderType,
 	FilterType
 } from './Constants.js'
+import Balance from './data/Balance.js'
 import { TradeParams } from '../app.js'
 
 const ORDER_POLLING_TIMEOUT_MS = 30000;
 const ORDER_POLLING_INTERVAL_MS = 500;
 
 const BOLLINGER_BAND_FACTOR = 2;
-const FEE_PERCENT = 0.015/100; 			// Assuming user has BNB in account
+const FEE_PERCENT = 0.05/100; 			// Assuming user has BNB in account
 
 export default class AutoTrader {
 
@@ -34,35 +35,62 @@ export default class AutoTrader {
 		this.prevBuyTicker = null;
 		this.lastBoughtPrice = null;
 		this.lastSoldPrice = null;
+		this.baseBalance = null;
+		this.quoteBalance = null;
 
 		this.cumulativeGain = 1;
 		this.tradeQty = TradeParams.TRADE_QTY;
 		this.isPartiallyFilled = false;
 
 		this._MIN_TICK = null;
+		this._MIN_QTY = null;
 		this._MIN_NOTIONAL = null;
 		this._PRECISION = null;
+		this._BASE = null;		// first asset in symbol
+		this._QUOTE = null;		// second asset in symbol
 
-		this.initTradeInfo();
+		this.init();
 	}
 
-	initTradeInfo() {
+	init() {
 		this.getExchangeInfo().then(res => {
-			for (let i = 0; i < res.symbols.length; i++) {
-				if (res.symbols[i].symbol == this.symbol) {
-					this._PRECISION = Number(res.symbols[i].baseAssetPrecision);
-					res.symbols[i].filters.forEach(filter => {
-						if (filter.filterType == FilterType.PRICE_FILTER) {
-							this._MIN_TICK = Number(filter.tickSize);
-						} 
-						else if (filter.filterType == FilterType.MIN_NOTIONAL) {
-							this._MIN_NOTIONAL = Number(filter.minNotional);
-						}
-					});
-					break;
-				}
+			this.initTradeInfo(res.symbols);
+			this.getAccountInfo().then(res => {
+				this.initAccountInfo(res.balances);
+				this.position = TradeParams.INITIAL_POSITION;
+			});
+		});
+	}
+
+	initTradeInfo(symbols) {
+		for (let i = 0; i < symbols.length; i++) {
+			if (symbols[i].symbol == this.symbol) {
+				this._BASE = symbols[i].baseAsset;
+				this._QUOTE = symbols[i].quoateAsset;
+				this._PRECISION = Number(symbols[i].baseAssetPrecision);
+				symbols[i].filters.forEach(filter => {
+					if (filter.filterType == FilterType.PRICE_FILTER) {
+						this._MIN_TICK = Number(filter.tickSize).toFixed(8);
+					}
+					else if (filter.filterType == FilterType.LOT_SIZE) {
+						this._MIN_QTY = Number(filter.minQty).toFixed(8);
+					} 
+					else if (filter.filterType == FilterType.MIN_NOTIONAL) {
+						this._MIN_NOTIONAL = Number(filter.minNotional).toFixed(8);
+					}
+				});
+				break;
 			}
-			this.position = TradeParams.INITIAL_POSITION;
+		}
+	}
+
+	initAccountInfo(balances) {
+		balances.forEach(balance => {
+			if (balance.asset == this._BASE) {
+				this.baseBalance = new Balance(balance.asset, balance.free);
+			} else if (balance.asset == this._QUOTE) {
+				this.quoteBalance = new Balance(balance.asset, balance.free);
+			}
 		});
 	}
 
@@ -107,6 +135,12 @@ export default class AutoTrader {
 				}
 				let price = (x.ticker + this._MIN_TICK).toFixed(this._PRECISION);
 				if (this.prevBuyTicker != null && this.shouldBuy_2(x.ticker, price, x.ma, x.std)) {
+					let maxQty = (this.quoteBalance.qty / price).toFixed(this._PRECISION);
+					this.tradeQty = (this.tradeQty > maxQty) ? maxQty : this.tradeQty;
+					if (this.isBelowMinimumNotional(this.tradeQty, price)) {
+						this.position = Position.SELL;
+						return;
+					}
 					this.buy(price, this.tradeQty, OrderType.LIMIT);
 				}
 				this.prevBuyTicker = x.ticker;
@@ -146,6 +180,11 @@ export default class AutoTrader {
 				}
 				let price = (x.ticker - this._MIN_TICK).toFixed(this._PRECISION);
 				if (this.prevAskTicker != null && this.shouldSell_2(x.ticker, price, x.ma, x.std)) {
+					this.tradeQty = (this.tradeQty > this.baseBalance.qty) ? this.baseBalance.qty : this.tradeQty;
+					if (this.isBelowMinimumNotional(this.tradeQty, price)) {
+						this.position = Position.BUY;
+						return;
+					}
 					this.sell(price, this.tradeQty, OrderType.LIMIT);
 				}
 				this.prevAskTicker = x.ticker;
@@ -177,6 +216,15 @@ export default class AutoTrader {
 		return this.position == Position.SELL && 
 				(percentGain == null || percentGain >= TradeParams.MIN_PERCENT_GAIN) && 
 				price > ma + std;
+	}
+
+	isBelowMinimumNotional(qty, price) {
+		if ((qty*price).toFixed(this._PRECISION) < this._MIN_NOTIONAL) {
+			console.log("Changing position due to minimum notional");
+			this.msgBot.say("Changing position due to minimum notional");
+			return true;
+		}
+		return false;
 	}
 
 	async sell(price, qty, type = OrderType.MARKET) {
@@ -325,8 +373,12 @@ export default class AutoTrader {
 				if (res.side == Position.BUY) {					
 					msg = `Bought ${res.executedQty} of ${res.symbol} @ ${res.price}`;
 					this.lastBoughtPrice = Number(res.price);
+					this.baseBalance.addQty(res.executedQty);
+					this.quoteBalance.subtractQty(res.executedQty);
 				} else if (res.side == Position.SELL) {
 					msg = `Sold ${res.executedQty} of ${res.symbol} @ ${res.price}`;
+					this.baseBalance.subtractQty(res.executedQty);
+					this.quoteBalance.subtractQty(res.executedQty);
 					if (this.lastBoughtPrice) {
 						let percentChange = getPercentGain(res.price, this.lastBoughtPrice, FEE_PERCENT);
 						this.cumulativeGain *= (1 + percentChange/100);
@@ -345,7 +397,7 @@ export default class AutoTrader {
 				let action = (res.side == Position.BUY) ? "BOUGHT" : "SOLD";
 				this.logger.write(`${action}\t${res.time}\t${res.clientOrderId}\t${res.price}\t${res.origQty}\t${res.executedQty}\n`);
 
-				// reset trade variables
+				// update trade variables
 				let notional = Number(res.executedQty) * Number(res.price);
 
 				if (res.status == OrderStatus.FILLED) {
@@ -353,7 +405,12 @@ export default class AutoTrader {
 					this.position = (currentPosition == Position.BUY) ? Position.SELL : Position.BUY;
 				} else {
 					this.tradeQty -= Number(res.executedQty);
-					this.position = currentPosition;
+					if (this.tradeQty < this._MIN_QTY) {
+						this.position = (currentPosition == Position.BUY) ? Position.SELL : Position.BUY;
+						this.tradeQty = TradeParams.TRADE_QTY - this.tradeQty;
+					} else {
+						this.position = currentPosition;
+					}
 				}
 				this.isPartiallyFilled = false;	// reset this flag after we finish an order
 			} else if (res.status == OrderStatus.CANCELED) {
