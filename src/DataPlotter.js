@@ -5,7 +5,6 @@
 const CONFIG = require("../config.json");
 const plotly = require("plotly")(CONFIG.PLOTLY_USERNAME, CONFIG.PLOTLY_API_KEY);
 
-const WINDOW_SIZE_S = 300;
 const BOLLINGER_BAND_FACTOR = 2;
 
 // return date string in format YYYY-MM-DD
@@ -21,19 +20,18 @@ class DataPlotter {
 		this.tradeData = new TradeData();
 
 		this.lineReader = require("readline").createInterface({
-			// input: require("fs").createReadStream(`./data/${getDate()}/VENBNB_stats.txt`)
-			input: require("fs").createReadStream("./data/temp.txt")
+			input: require("fs").createReadStream(`./logs/2018-02-12/ETHUSDT_stats.txt`)
 		});
 
 		this.lineReader.on("close", () => {
-			this.plot("ETHUSDT");
+			this.plot("ETHUSDT-raw");
 		});
 	}
 
 	plot(name) {
 		var options = { fileopt: "overwrite", filename: name };
 		var plotData = [
-			this.askData.getDataTrace("Ask Ticker"), 
+			this.askData.getDataTrace("Ask Ticker"),
 			this.askData.getEmaTrace("Ask EMA"),
 			this.askData.getFloorTrace("Ask Floor"),
 			this.askData.getCeilTrace("Ask Ceil"),
@@ -42,9 +40,9 @@ class DataPlotter {
 			this.bidData.getFloorTrace("Bid Floor"),
 			this.bidData.getCeilTrace("Bid Ceil"),
 			this.tradeData.getSellTrace(),
-			this.tradeData.getSoldTrace(),
+			// this.tradeData.getSoldTrace(),
 			this.tradeData.getBuyTrace(),
-			this.tradeData.getBoughtTrace(),
+			// this.tradeData.getBoughtTrace(),
 		];
 
 		plotly.plot(plotData, options, function(err, msg) {
@@ -53,79 +51,97 @@ class DataPlotter {
 		});
 	}
 
+	// stats_data colunmns:
+	// timestamp   bestAsk   bestBid   askEma   bidEma   askStd   bidStd
 	processStatData() {
 		this.lineReader.on("line", line => {
 			let row = line.split("\t");
-			this.processStatDataRow(row);
+			if (row[0] == 'SELL' || row[0] == 'BUY' || row[0] == 'SOLD' || row[0] == 'BOUGHT') {
+				this.tradeData.append(row[0], row[1], row[3]);
+			} else {
+				this.askData.append(row[0], row[1], row[3], row[5]);
+				this.bidData.append(row[0], row[2], row[4], row[6]);
+			}
 		});
-	}
-
-	// stats_data colunmns:
-	// timestamp   bestAsk   bestBid   askEma   bidEma   askStd   bidStd
-	processStatDataRow(row) {
-		if (row[0] == 'SELL' || row[0] == 'BUY' || row[0] == 'SOLD' || row[0] == 'BOUGHT') {
-			this.tradeData.append(row[0], row[1], row[3]);
-		} else {
-			this.askData.append(row[0], row[1], row[3], row[5]);
-			this.bidData.append(row[0], row[2], row[4], row[6]);
-		}
-	}
-
-	processRawData() {
-		let n = 0;
-		// lineReader.on("line", line => {
-		// 	let row = line.split("\t");
-		// 	// Create raw data set
-		// 	data.push(arr[2]);
-		// 	time.push(parseInt(arr[0]));
-		// 	emaData.push(arr[4]);
-		// 	stdDataCeil.push(parseFloat(arr[4]) + parseFloat(arr[6]) * BOLLINGER_BAND_FACTOR);
-		// 	stdDataFloor.push(parseFloat(arr[4]) - parseFloat(arr[6]) * BOLLINGER_BAND_FACTOR);
-		// 	n++;
-		// 	if (n >= period) {
-		// 		// EMA
-		// 		if (prevEma == null) {
-		// 			prevEma = calcAvg(data.slice(0, period));
-		// 			emaData.push(prevEma);
-		// 		} else {
-		// 			let ema = calcEma(data[n-1], prevEma, period);
-		// 			emaData.push(ema);
-		// 			prevEma = ema;
-		// 		}
-
-		// 		// Standard Deviation
-		// 		let std = calcStd(data.slice(n-period, n));
-		// 		stdDataCeil.push(prevEma + std*BOLLINGER_BAND_FACTOR);
-		// 		stdDataFloor.push(prevEma - std*BOLLINGER_BAND_FACTOR);
-		// 		maTime.push(n);
-		// 	}
-		// });
 	}
 
 	// raw_data colunmns:
 	// timestamp   bestAsk   bestBid
-	processRawDataRow(row) {
-		// todo
+	processRawData(wSize) {
+		let n = 0;
+		this.lineReader.on("line", line => {
+			let row = line.split("\t");
+			if (n > 15000) {
+				this.lineReader.close();
+			}
+			if (row[0] == 'SELL' || row[0] == 'BUY' || row[0] == 'SOLD' || row[0] == 'BOUGHT') {
+				// this.tradeData.append(row[0], row[1], row[3]);
+			} else {
+				n++;
+				this.askData.appendRaw(row[0], row[1]);
+				this.bidData.appendRaw(row[0], row[2]);
+				if (n >= wSize) {
+					let sellTradeArr = this.askData.calculateStats(row[0], n, wSize);
+					let buyTradeArr = this.bidData.calculateStats(row[0], n, wSize);
+					this.tradeData.appendSimulationData('SELL', sellTradeArr);
+					this.tradeData.appendSimulationData('BUY', buyTradeArr);
+				}
+			}
+		});
 	}
 }
 
 class Data {
 	constructor() {
 		this.data = [];
+		this.time = [];
 		this.ema = [];
 		this.std = [];
-		this.time = [];
 		this.floor = [];
 		this.ceil = [];
+		this.statTime = [];
+
+
+		// used for plotting raw stats data
+		this.prevEma = null;
+	}
+
+	appendRaw(time, data) {
+		this.time.push(time);
+		this.data.push(data);
+	}
+
+	calculateStats(time, pos, wSize) {
+		this.statTime.push(time);
+		// EMA
+		if (this.prevEma == null) {
+			this.prevEma = calcAvg(this.data.slice(0, wSize));
+			this.ema.push(this.prevEma);
+		} else {
+			let ema = calcEma(this.data[pos-1], this.prevEma, wSize);
+			this.ema.push(ema);
+			this.prevEma = ema;
+		}
+
+		// Standard Deviation
+		let std = calcStd(this.data.slice(pos-wSize, pos));
+		let ceil = this.prevEma + std*BOLLINGER_BAND_FACTOR;
+		let floor = this.prevEma - std*BOLLINGER_BAND_FACTOR
+		this.std.push(std);
+		this.ceil.push(ceil);
+		this.floor.push(floor);
+
+		return [time, this.data[pos-1], floor, ceil];
 	}
 
 	append(time, data, ema, std) {
 		this.data.push(data);
-		this.ema.push(ema);
-		this.std.push(std);
 		this.time.push(time);
+		this.ema.push(ema);
+		this.std.push(std);				
 		this.floor.push(Number(ema) - BOLLINGER_BAND_FACTOR * Number(std));
 		this.ceil.push(Number(ema) + BOLLINGER_BAND_FACTOR * Number(std));
+		this.statTime.push(time);
 	}
 
 	getDataTrace(name) {
@@ -139,7 +155,7 @@ class Data {
 
 	getEmaTrace(name) {
 		return {
-			x: this.time,
+			x: this.statTime,
 			y: this.ema,
 			name: name,
 			type: "scatter"
@@ -148,7 +164,7 @@ class Data {
 
 	getFloorTrace(name) {
 		return {
-			x: this.time,
+			x: this.statTime,
 			y: this.floor,
 			name: name,
 			type: "scatter"
@@ -157,7 +173,7 @@ class Data {
 
 	getCeilTrace(name) {
 		return {
-			x: this.time,
+			x: this.statTime,
 			y: this.ceil,
 			name: name,
 			type: "scatter"
@@ -192,6 +208,26 @@ class TradeData {
 			this.boughtData.push(Number(price));
 			this.boughtTime.push(Number(timestamp));
 		}
+	}
+
+	// simulationArr = [time, price, floor, ceil]
+	appendSimulationData(orderType, simulationArr) {
+		let time = simulationArr[0];
+		let price = simulationArr[1];
+		let floor = simulationArr[2];
+		let ceil = simulationArr[3];
+
+		// Trade Simulation
+		let spread = ceil - floor;
+		let p90 = floor + 0.9*spread;
+		let p10 = floor + 0.1*spread;
+		if (orderType == 'SELL' && price > p90) {
+			this.sellData.push(price);
+			this.sellTime.push(time);
+		} else if (orderType == 'BUY' && price < p10) {
+			this.buyData.push(price);
+			this.buyTime.push(time);
+		}		
 	}
 
 	getSellTrace() {
@@ -291,5 +327,6 @@ function calcStd(data) {
 }
 
 const dp = new DataPlotter();
-dp.processStatData();
+// dp.processStatData();
+dp.processRawData(300);
 
