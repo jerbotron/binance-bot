@@ -9,6 +9,8 @@ import AutoTrader from './src/AutoTrader'
 import { Position } from './src/Constants'
 import { app } from './src/Webhook'
 import Binance from 'binance-api-node'
+import AlertBotNoOp from "./src/AlertBotNoOp";
+
 
 const CONFIG = require("./config.json");
 
@@ -21,6 +23,7 @@ const client = Binance({
 /** EDIT PARAMS BELOW BEFORE TRADING **/
 /**************************************/
 export const TradeParams = Object.freeze({
+
 	SYMBOL: 'BNBUSDT',
 	IS_SIMULATION: true,
 	INITIAL_POSITION: Position.SELL,
@@ -48,14 +51,14 @@ const logger = new winston.Logger({
 logger.info('Test')
 
 
-const msgBot 		= new AlertBot();
+const msgBot 		= new AlertBotNoOp();
 const dataEngine 	= new DataEngine(msgBot);
 const tracker 		= new Tracker(client, dataEngine, msgBot);
 const autoTrader 	= new AutoTrader(client, dataEngine, tracker, msgBot);
 
 
-autoTrader.start();
-console.log(TradeParams);
+// autoTrader.start();
+// console.log(TradeParams);
 
 app.listen(8080, () => console.log('Jerbotron webhook listening on port 8080...'));
 
