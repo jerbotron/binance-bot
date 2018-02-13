@@ -7,11 +7,16 @@ import { BOLLINGER_BAND_FACTOR } from '../Constants.js'
 export default class TradeData {
 
 	// maArr = [askMa, bidMa], stdArr = [askStd, bidStd]
-	constructor(ask, bid, maArr, stdArr) {
+	constructor(timestamp, ask, bid, maArr, stdArr) {
+		this._timestamp = timestamp;
 		this._ask = Number(ask);
 		this._bid = Number(bid);
 		this._maArr = maArr;
 		this._stdArr = stdArr;
+	}
+
+	get timestamp() {
+		return this._timestamp;
 	}
 
 	get ask() {
@@ -39,30 +44,36 @@ export default class TradeData {
 	}
 
 	getAskSpread() {
-		let ceil = this._maArr[0] + 2 * this._stdArr[0];
-		let floor = this._maArr[0] - 2 * this._stdArr[0];
-		return (ceil - floor);
+		return 2 * BOLLINGER_BAND_FACTOR * this._stdArr[0];
 	}
 
 	getBuySpread() {
-		let ceil = this._maArr[1] + 2 * this._stdArr[1];
-		let floor = this._maArr[1] - 2 * this._stdArr[1];
-		return (ceil - floor);
+		return 2 * BOLLINGER_BAND_FACTOR * this._stdArr[1];
 	}
 
 	getAskP90() {
-		return (this._ask + 0.90 * this.getAskSpread());
+		return this.getAskPercentile(90);
 	}
 
 	getBuyP90() {
-		return (this._bid + 0.90 * this.getBuySpread());	
+		return this.getBuyPercentile(90);
 	}
 
 	getAskP10() {
-		return (this._ask + 0.10 * this.getAskSpread());
+		return this.getAskPercentile(10);
 	}
 
 	getBuyP10() {
-		return (this._bid + 0.10 * this.getBuySpread());	
+		return this.getBuyPercentile(10);
+	}
+
+	getAskPercentile(percent) {
+		let floor = this._maArr[0] - 2 * this._stdArr[0];
+		return (floor + percent/100 * this.getAskSpread());
+	}
+
+	getBuyPercentile(percent) {
+		let floor = this._maArr[1] - 2 * this._stdArr[1];
+		return (floor + percent/100 * this.getBuySpread());
 	}
 }

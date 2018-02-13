@@ -2,10 +2,9 @@
 
 "use strict";
 
-import { BOLLINGER_BAND_FACTOR } from './Constants.js'
-
 const CONFIG = require("../config.json");
 const plotly = require("plotly")(CONFIG.PLOTLY_USERNAME, CONFIG.PLOTLY_API_KEY);
+const BOLLINGER_BAND_FACTOR = 2;
 
 // return date string in format YYYY-MM-DD
 function getDate() {
@@ -20,11 +19,11 @@ class DataPlotter {
 		this.tradeData = new TradeData();
 
 		this.lineReader = require("readline").createInterface({
-			input: require("fs").createReadStream(`./logs/2018-02-12/ETHUSDT_stats.txt`)
+			input: require("fs").createReadStream(`./logs/2018-02-13/BNBUSDT_stats.txt`)
 		});
 
 		this.lineReader.on("close", () => {
-			this.plot("ETHUSDT-raw");
+			this.plot("BNBUSDT");
 		});
 	}
 
@@ -39,9 +38,9 @@ class DataPlotter {
 			this.bidData.getEmaTrace("Bid EMA"),
 			this.bidData.getFloorTrace("Bid Floor"),
 			this.bidData.getCeilTrace("Bid Ceil"),
-			this.tradeData.getSellTrace(),
+			// this.tradeData.getSellTrace(),
 			// this.tradeData.getSoldTrace(),
-			this.tradeData.getBuyTrace(),
+			// this.tradeData.getBuyTrace(),
 			// this.tradeData.getBoughtTrace(),
 		];
 
@@ -327,6 +326,6 @@ function calcStd(data) {
 }
 
 const dp = new DataPlotter();
-// dp.processStatData();
-dp.processRawData(300);
+dp.processStatData();
+// dp.processRawnodeData(300);
 
