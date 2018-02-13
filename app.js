@@ -31,23 +31,6 @@ export const TradeParams = Object.freeze({
 });
 
 
-import winston from 'winston'
-import { transports, format } from 'winston'
-import { printf } from 'winston'
-
-// console.log(winston)
-console.log(transports)
-
-const logger = new winston.Logger({
-    level: TradeParams.LOGGING_LEVEL,
-    format: printf(info => {
-        return '${info.timestamp}|${info.level}|${info.message}'
-    }),
-    transports: [new transports.Console({ colorize: true })]
-});
-logger.info('Test')
-
-
 const msgBot 		= new AlertBot();
 const dataEngine 	= new DataEngine(msgBot);
 const tracker 		= new Tracker(client, dataEngine, msgBot);
