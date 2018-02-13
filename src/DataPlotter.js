@@ -2,10 +2,10 @@
 
 "use strict";
 
+import { BOLLINGER_BAND_FACTOR } from './Constants.js'
+
 const CONFIG = require("../config.json");
 const plotly = require("plotly")(CONFIG.PLOTLY_USERNAME, CONFIG.PLOTLY_API_KEY);
-
-const BOLLINGER_BAND_FACTOR = 2;
 
 // return date string in format YYYY-MM-DD
 function getDate() {

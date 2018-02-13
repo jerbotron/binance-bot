@@ -22,11 +22,11 @@ const client = Binance({
 /**************************************/
 export const TradeParams = Object.freeze({
 	SYMBOL: 'ETHUSDT',
-	IS_SIMULATION: false,
+	IS_SIMULATION: true,
 	INITIAL_POSITION: Position.BUY,
 	MIN_PERCENT_GAIN: 0.20,
 	TRADE_QTY: 1,
-	WINDOW_SIZE_S: 90
+	WINDOW_SIZE_S: 180
 });
 
 const msgBot 		= new AlertBot();

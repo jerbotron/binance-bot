@@ -6,10 +6,11 @@ import fs from 'fs';
 import Rx from 'rxjs/Rx';
 import TickerSum from './data/TickerSum.js'
 import StatData from './data/StatData.js'
+import TradeData from './data/TradeData.js'
 import { getDate } from './Utils.js';
 import { TradeParams } from '../app.js'
+import { BOLLINGER_BAND_FACTOR } from './Constants.js'
 
-const BOLLINGER_BAND_FACTOR = 2;
 const USE_SMA = false;
 
 /*
@@ -35,30 +36,32 @@ export default class DataEngine {
 
 		this.askSubject = new Rx.Subject();
 		this.buySubject = new Rx.Subject();
+		this.tradeSubject = new Rx.Subject();
 	}
 
 	enqueue(ticker) {
 		this.dataArr[this.count % this.wSize] = new Ticker(ticker.bestAsk, ticker.bestBid);
 		this.count++;
-		if (this.count >= this.wSize) {
-			if (this.count == this.wSize) {
-				console.log("Trading began");
-				this.msgBot.say("Trading began");
-			}
+		if (this.count >= this.wSize) {	
 			this.calculateStats(ticker);
 			this.logger.write(`${ticker.eventTime}\t${ticker.bestAsk}\t${ticker.bestBid}\t${this.ma[0]}\t${this.ma[1]}\t${this.std[0]}\t${this.std[1]}\n`)
+		} else {
+			// let ceil = [this.ma[0] + BOLLINGER_BAND_FACTOR * this.std[0], this.ma[1] + BOLLINGER_BAND_FACTOR * this.std[1]];
+			// let floor = [this.ma[0] - BOLLINGER_BAND_FACTOR * this.std[0], this.ma[1] - BOLLINGER_BAND_FACTOR * this.std[1]];
+			// console.log(`${ticker.eventTime}\t${ticker.bestAsk}\t${floor[0]}\t${this.ma[0]}\t${ceil[0]}\t${ticker.bestBid}\t${floor[1]}\t${this.ma[1]}\t${ceil[1]}\n`);
+			console.log("Trading begins in: " + (this.wSize - this.count));
 		}
-		let ceil = [this.ma[0] + BOLLINGER_BAND_FACTOR * this.std[0], this.ma[1] + BOLLINGER_BAND_FACTOR * this.std[1]];
-		let floor = [this.ma[0] - BOLLINGER_BAND_FACTOR * this.std[0], this.ma[1] - BOLLINGER_BAND_FACTOR * this.std[1]];
-		// console.log(`${ticker.eventTime}\t${ticker.bestAsk}\t${floor[0]}\t${this.ma[0]}\t${ceil[0]}\t${ticker.bestBid.toString()}\t${floor[1]}\t${this.ma[1]}\t${ceil[1]}\n`);
 	}
 
 	calculateStats(ticker) {
 		let u = this.calcAvg();
 		this.ma = (USE_SMA || (this.ma[0] == null || this.ma[1] == null)) ? u : this.calcEma(ticker.bestAsk, ticker.bestBid);
 		this.std = this.calcStd(u);
-		this.askSubject.next(new StatData(ticker.bestAsk, this.ma[0], this.std[0]));
-		this.buySubject.next(new StatData(ticker.bestBid, this.ma[1], this.std[1]));
+		if (this.count >= 1.5 * this.wSize) {
+			this.tradeSubject.next(new TradeData(ticker.bestAsk, ticker.bestBid, this.ma, this.std));
+		}		
+		// this.askSubject.next(new StatData(ticker.bestAsk, this.ma[0], this.std[0]));
+		// this.buySubject.next(new StatData(ticker.bestBid, this.ma[1], this.std[1]));
 	}
 
 	alertAskPrice() {
@@ -67,6 +70,10 @@ export default class DataEngine {
 
 	alertBuyPrice() {
 		return this.buySubject;
+	}
+
+	alertPriceChange() {
+		return this.tradeSubject;
 	}
 
 	// Returns size 2 array [askAvg, bidAvg]

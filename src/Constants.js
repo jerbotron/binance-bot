@@ -2,6 +2,8 @@
 
 "use strict";
 
+const BOLLINGER_BAND_FACTOR = 2;
+
 const Position = Object.freeze({
 	BUY: 'BUY',
 	SELL: 'SELL',
@@ -30,6 +32,7 @@ const FilterType = Object.freeze({
 });
 
 export {
+	BOLLINGER_BAND_FACTOR,
 	Position,
 	OrderStatus,
 	OrderType,
