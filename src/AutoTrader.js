@@ -95,14 +95,16 @@ export default class AutoTrader {
 	}
 
 	start() {
-		this.subscribeBuy();
-		this.subscribeSell();
+		// this.subscribeBuy();
+		// this.subscribeSell();
+		this.subscribeTrade();
 		this.tracker.trackTicker(this.symbol);
 	}
 
 	stop() {
-		this.unsubscribeBuy();
-		this.unsubscribeSell();
+		// this.unsubscribeBuy();
+		// this.unsubscribeSell();
+		this.unsubscribeTrade();
 	}
 
 	subscribeBuy() {
@@ -119,12 +121,80 @@ export default class AutoTrader {
 											   .subscribe(this.autoSell());
 	}
 
+	subscribeTrade() {
+		this.tradeSubscription = this.dataEngine.alertPriceChange()
+											  .subscribeOn(Rx.Scheduler.asap)
+											  .observeOn(Rx.Scheduler.queue)
+											  .subscribe(this.autoTrade());
+	}
+
 	unsubscribeBuy() {
 		this.buySubscription.unsubscribe();
 	}
 
 	unsubscribeSell() {
 		this.sellSubscription.unsubscribe();
+	}
+
+	unsubscribeTrade() {
+		this.tradeSubscription.unsubscribe();
+	}
+
+	autoTrade() {
+		return Rx.Subscriber.create(
+			// x = TradeData obj
+			x => {
+				switch (this.position) {					
+					case Position.BUY: {						
+						let price = Number((x.bid + this._MIN_TICK).toFixed(this._PRECISION));
+						// console.log(`${this.position}\t${price}\t${x.getBuyP10()}`);
+						if (price <= x.getBuyP10() && 
+							price >= this.prevBuyTicker) 
+						{
+							let maxQty = Number((this.quoteBalance.qty / price).toFixed(this._PRECISION));
+							this.tradeQty = (this.tradeQty > maxQty) ? maxQty : this.tradeQty;
+							if (this.isBelowMinimumNotional(this.tradeQty, price)) {
+								this.position = Position.SELL;
+								this.tradeQty = TradeParams.TRADE_QTY;
+							} else {
+								this.buy(price, this.tradeQty, OrderType.LIMIT);
+							}							
+						}
+						this.prevBuyTicker = x.bid;
+						break;
+					}
+					case Position.SELL: {
+						let price = Number((x.ask - this._MIN_TICK).toFixed(this._PRECISION));
+						let percentGain = (this.lastBoughtPrice) ? getPercentGain(price, this.lastBoughtPrice, FEE_PERCENT) :  null;
+						// console.log(`${this.position}\t${price}\t${x.getAskP90()}\t${percentGain}`);
+						if (price >= x.getAskP90() && 
+							price <= this.prevAskTicker &&
+							(percentGain == null || percentGain >= TradeParams.MIN_PERCENT_GAIN))
+						{
+							this.tradeQty = (this.tradeQty > this.baseBalance.qty) ? this.baseBalance.qty : this.tradeQty;
+							if (this.isBelowMinimumNotional(this.tradeQty, price)) {
+								this.position = Position.BUY;
+								this.tradeQty = TradeParams.TRADE_QTY;
+							} else {
+								this.sell(price, this.tradeQty, OrderType.LIMIT);
+							}
+						}
+						this.prevAskTicker = x.ask;
+						break;
+					}
+					case Position.PENDING:
+					default:
+						return;
+				}
+			},
+			e => {
+				console.log(`onError: ${e}`);
+				this.msgBot.say(`onError: ${e}`);
+			},
+			() => {
+				console.log('onCompleted');
+			}
+		);
 	}
 
 	autoBuy() {
@@ -136,7 +206,6 @@ export default class AutoTrader {
 				let price = Number((x.ticker + this._MIN_TICK).toFixed(this._PRECISION));
 				if (this.prevBuyTicker != null && this.shouldBuy_2(x.ticker, price, x.ma, x.std)) {
 					let maxQty = Number((this.quoteBalance.qty / price).toFixed(this._PRECISION));
-					console.log(this.tradeQty + " , " + maxQty);
 					this.tradeQty = (this.tradeQty > maxQty) ? maxQty : this.tradeQty;
 					if (this.isBelowMinimumNotional(this.tradeQty, price)) {
 						this.position = Position.SELL;
@@ -181,7 +250,6 @@ export default class AutoTrader {
 				}
 				let price = Number((x.ticker - this._MIN_TICK).toFixed(this._PRECISION));
 				if (this.prevAskTicker != null && this.shouldSell_2(x.ticker, price, x.ma, x.std)) {
-					console.log(this.tradeQty + " , " + this.baseBalance._qty);
 					this.tradeQty = (this.tradeQty > this.baseBalance.qty) ? this.baseBalance.qty : this.tradeQty;
 					if (this.isBelowMinimumNotional(this.tradeQty, price)) {
 						this.position = Position.BUY;
@@ -221,7 +289,6 @@ export default class AutoTrader {
 	}
 
 	isBelowMinimumNotional(qty, price) {
-		console.log(Number((qty*price).toFixed(this._PRECISION)) + " < " + this._MIN_NOTIONAL);
 		if (Number((qty*price).toFixed(this._PRECISION)) < this._MIN_NOTIONAL) {
 			console.log("Changing position due to minimum notional");
 			this.msgBot.say("Changing position due to minimum notional");
@@ -417,7 +484,6 @@ export default class AutoTrader {
 				}
 				this.isPartiallyFilled = false;	// reset this flag after we finish an order
 			} else if (res.status == OrderStatus.CANCELED) {
-				// console.log("Back to " + currentPosition);
 				this.position = currentPosition;
 			}
 		})
