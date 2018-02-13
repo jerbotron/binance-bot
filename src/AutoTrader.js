@@ -147,7 +147,7 @@ export default class AutoTrader {
 				switch (this.position) {					
 					case Position.BUY: {						
 						let price = Number((x.bid + this._MIN_TICK).toFixed(this._PRECISION));
-						// console.log(`${this.position}\t${price}\t${x.getBuyP10()}`);
+						console.log(`${x.timestamp}\t${this.position}\t${price}\t${x.getBuyP10()}`);
 						if (price <= x.getBuyP10() && 
 							price >= this.prevBuyTicker) 
 						{
@@ -166,7 +166,7 @@ export default class AutoTrader {
 					case Position.SELL: {
 						let price = Number((x.ask - this._MIN_TICK).toFixed(this._PRECISION));
 						let percentGain = (this.lastBoughtPrice) ? getPercentGain(price, this.lastBoughtPrice, FEE_PERCENT) :  null;
-						// console.log(`${this.position}\t${price}\t${x.getAskP90()}\t${percentGain}`);
+						console.log(`${x.timestamp}\t${this.position}\t${price}\t${x.getAskP90()}\t${percentGain}`);
 						if (price >= x.getAskP90() && 
 							price <= this.prevAskTicker &&
 							(percentGain == null || percentGain >= TradeParams.MIN_PERCENT_GAIN))

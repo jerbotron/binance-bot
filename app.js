@@ -21,12 +21,12 @@ const client = Binance({
 /** EDIT PARAMS BELOW BEFORE TRADING **/
 /**************************************/
 export const TradeParams = Object.freeze({
-	SYMBOL: 'ETHUSDT',
+	SYMBOL: 'BNBUSDT',
 	IS_SIMULATION: true,
-	INITIAL_POSITION: Position.BUY,
+	INITIAL_POSITION: Position.SELL,
 	MIN_PERCENT_GAIN: 0.20,
-	TRADE_QTY: 1,
-	WINDOW_SIZE_S: 180
+	TRADE_QTY: 50,
+	WINDOW_SIZE_S: 240
 });
 
 
