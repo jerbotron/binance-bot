@@ -6,3 +6,4 @@ config.json
 test.js
 log.txt
 .idea/
+app_dev.js
