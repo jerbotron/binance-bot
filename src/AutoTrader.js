@@ -95,30 +95,12 @@ export default class AutoTrader {
 	}
 
 	start() {
-		// this.subscribeBuy();
-		// this.subscribeSell();
 		this.subscribeTrade();
 		this.tracker.trackTicker(this.symbol);
 	}
 
 	stop() {
-		// this.unsubscribeBuy();
-		// this.unsubscribeSell();
 		this.unsubscribeTrade();
-	}
-
-	subscribeBuy() {
-		this.buySubscription = this.dataEngine.alertBuyPrice()
-											  .subscribeOn(Rx.Scheduler.asap)
-											  .observeOn(Rx.Scheduler.queue)
-											  .subscribe(this.autoBuy());
-	}
-
-	subscribeSell() {		
-		this.sellSubscription = this.dataEngine.alertAskPrice()
-											   .subscribeOn(Rx.Scheduler.asap)
-											   .observeOn(Rx.Scheduler.queue)
-											   .subscribe(this.autoSell());
 	}
 
 	subscribeTrade() {
@@ -126,14 +108,6 @@ export default class AutoTrader {
 											  .subscribeOn(Rx.Scheduler.asap)
 											  .observeOn(Rx.Scheduler.queue)
 											  .subscribe(this.autoTrade());
-	}
-
-	unsubscribeBuy() {
-		this.buySubscription.unsubscribe();
-	}
-
-	unsubscribeSell() {
-		this.sellSubscription.unsubscribe();
 	}
 
 	unsubscribeTrade() {
@@ -147,9 +121,7 @@ export default class AutoTrader {
 				switch (this.position) {					
 					case Position.BUY: {						
 						let price = Number((x.bid + this._MIN_TICK).toFixed(this._PRECISION));
-						console.log(`${x.timestamp}\t${this.position}\t${price}\t${x.getBuyP10()}`);
-						if (price <= x.getBuyP10() && 
-							price >= this.prevBuyTicker) 
+						if (this.shouldBuy_1(x, price)) 
 						{
 							let maxQty = Number((this.quoteBalance.qty / price).toFixed(this._PRECISION));
 							this.tradeQty = (this.tradeQty > maxQty) ? maxQty : this.tradeQty;
@@ -157,7 +129,7 @@ export default class AutoTrader {
 								this.position = Position.SELL;
 								this.tradeQty = TradeParams.TRADE_QTY;
 							} else {
-								this.buy(price, this.tradeQty, OrderType.LIMIT);
+								this.buy(price, Number(this.tradeQty.toFixed(this._PRECISION)), OrderType.LIMIT);
 							}							
 						}
 						this.prevBuyTicker = x.bid;
@@ -166,17 +138,14 @@ export default class AutoTrader {
 					case Position.SELL: {
 						let price = Number((x.ask - this._MIN_TICK).toFixed(this._PRECISION));
 						let percentGain = (this.lastBoughtPrice) ? getPercentGain(price, this.lastBoughtPrice, FEE_PERCENT) :  null;
-						console.log(`${x.timestamp}\t${this.position}\t${price}\t${x.getAskP90()}\t${percentGain}`);
-						if (price >= x.getAskP90() && 
-							price <= this.prevAskTicker &&
-							(percentGain == null || percentGain >= TradeParams.MIN_PERCENT_GAIN))
+						if (this.shouldSell_1(x, price, percentGain))
 						{
 							this.tradeQty = (this.tradeQty > this.baseBalance.qty) ? this.baseBalance.qty : this.tradeQty;
 							if (this.isBelowMinimumNotional(this.tradeQty, price)) {
 								this.position = Position.BUY;
 								this.tradeQty = TradeParams.TRADE_QTY;
 							} else {
-								this.sell(price, this.tradeQty, OrderType.LIMIT);
+								this.sell(price, Number(this.tradeQty.toFixed(this._PRECISION)), OrderType.LIMIT);
 							}
 						}
 						this.prevAskTicker = x.ask;
@@ -197,95 +166,44 @@ export default class AutoTrader {
 		);
 	}
 
-	autoBuy() {
-		return Rx.Subscriber.create(
-			x => {
-				if (this.position != Position.BUY) {
-					return;
-				}
-				let price = Number((x.ticker + this._MIN_TICK).toFixed(this._PRECISION));
-				if (this.prevBuyTicker != null && this.shouldBuy_2(x.ticker, price, x.ma, x.std)) {
-					let maxQty = Number((this.quoteBalance.qty / price).toFixed(this._PRECISION));
-					this.tradeQty = (this.tradeQty > maxQty) ? maxQty : this.tradeQty;
-					if (this.isBelowMinimumNotional(this.tradeQty, price)) {
-						this.position = Position.SELL;
-						return;
-					}
-					this.buy(price, this.tradeQty, OrderType.LIMIT);
-				}
-				this.prevBuyTicker = x.ticker;
-			},
-			e => {
-				console.log(`onError: ${e}`);
-				this.msgBot.say(`onError: ${e}`);
-			},
-			() => {
-				console.log('onCompleted');
-			}
-		);
+	shouldBuy_1(x, price) {
+		let floor = x.bidMa - BOLLINGER_BAND_FACTOR * x.bidStd;
+		console.log(`${x.timestamp}\t${this.position}\t${price}\t${floor}\t${x.bidMa}\t${this.tradeQty}`);
+		return x.bid >= this.prevBuyTicker && 
+				x.bid > floor &&  
+				price < x.bidMa;
 	}
 
-	shouldBuy_1(ticker, price, ma, std) {
-		let floor = ma - BOLLINGER_BAND_FACTOR * std;
-		console.log(`${this.position}\t${ticker}\t${price}\t${floor}\t${ma}`);
-		return this.position == Position.BUY && 
-				ticker >= this.prevBuyTicker && 
-				ticker > floor &&  
-				price < ma;
+	shouldBuy_2(x, price) {
+		let floor = x.bidMa - BOLLINGER_BAND_FACTOR * x.bidStd;
+		console.log(`${x.timestamp}\t${this.position}\t${price}\t${floor}\t${x.bidMa-x.bidStd}\t${this.tradeQty}`);
+		return x.bid > floor &&  
+				price < (x.bidMa - x.bidStd);
 	}
 
-	shouldBuy_2(ticker, price, ma, std) {
-		let floor = ma - BOLLINGER_BAND_FACTOR * std;
-		console.log(`${this.position}\t${ticker}\t${price}\t${floor}\t${ma-std}`);
-		return this.position == Position.BUY && 
-				ticker > floor &&  
-				price < (ma - std);
+	shouldBuy_3(x, price) {
+		console.log(`${x.timestamp}\t${this.position}\t${price}\t${x.getBuyP10()}\t${this.tradeQty}`);
+		return price <= x.getBuyP10() && price >= this.prevBuyTicker;
 	}
 
-	autoSell() {
-		return Rx.Subscriber.create(
-			x => {
-				if (this.position != Position.SELL) {
-					return;
-				}
-				let price = Number((x.ticker - this._MIN_TICK).toFixed(this._PRECISION));
-				if (this.prevAskTicker != null && this.shouldSell_2(x.ticker, price, x.ma, x.std)) {
-					this.tradeQty = (this.tradeQty > this.baseBalance.qty) ? this.baseBalance.qty : this.tradeQty;
-					if (this.isBelowMinimumNotional(this.tradeQty, price)) {
-						this.position = Position.BUY;
-						return;
-					}
-					this.sell(price, this.tradeQty, OrderType.LIMIT);
-				}
-				this.prevAskTicker = x.ticker;
-			},
-			e => {
-				console.log(`onError: ${e}`);
-				this.msgBot.say(`onError: ${e}`);
-			},
-			() => {
-				console.log('onCompleted');
-			}
-		);
-	}
-
-	shouldSell_1(ticker, price, ma, std) {
-		let ceil = ma + BOLLINGER_BAND_FACTOR * std;
-		let percentGain = (this.lastBoughtPrice) ? getPercentGain(price, this.lastBoughtPrice, FEE_PERCENT) :  null;
-		console.log(`${this.position}\t${ticker}\t${price}\t${this.lastBoughtPrice}\t${percentGain}\t${ma}\t${this.tradeQty}`);
-		return this.position == Position.SELL && 
-				price <= this.prevAskTicker && 
+	shouldSell_1(x, price, percentGain) {
+		console.log(`${x.timestamp}\t${this.position}\t${price}\t${this.lastBoughtPrice}\t${percentGain}\t${x.askMa}\t${this.tradeQty}`);
+		return price <= this.prevAskTicker && 
 				(percentGain == null || percentGain >= TradeParams.MIN_PERCENT_GAIN) && 
-				price > ma;
+				price > x.askMa;
 	}
 
-	shouldSell_2(ticker, price, ma, std) {
-		let ceil = ma + BOLLINGER_BAND_FACTOR * std;
-		let percentGain = (this.lastBoughtPrice) ? getPercentGain(price, this.lastBoughtPrice, FEE_PERCENT) :  null;
-		console.log(`${this.position}\t${ticker}\t${price}\t${this.lastBoughtPrice}\t${percentGain}\t${ma+std}\t${this.tradeQty}`);
-		return this.position == Position.SELL && 
-				(percentGain == null || percentGain >= TradeParams.MIN_PERCENT_GAIN) && 
-				price > ma + std;
+	shouldSell_2(x, price, percentGain) {
+		console.log(`${x.timestamp}\t${this.position}\t${price}\t${this.lastBoughtPrice}\t${percentGain}\t${x.askMa+x.askStd}\t${this.tradeQty}`);
+		return (percentGain == null || percentGain >= TradeParams.MIN_PERCENT_GAIN) && 
+				price > x.askMa + x.askStd;
+	}
+
+	shouldSell_3(x, price, percentGain) {
+		console.log(`${x.timestamp}\t${this.position}\t${price}\t${x.getAskP90()}\t${percentGain}\t${this.tradeQty}`);
+		return price >= x.getAskP90() && 
+				price <= this.prevAskTicker &&
+				(percentGain == null || percentGain >= TradeParams.MIN_PERCENT_GAIN);
 	}
 
 	isBelowMinimumNotional(qty, price) {
