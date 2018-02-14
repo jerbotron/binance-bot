@@ -46,11 +46,11 @@ export default class DataEngine {
 			this.calculateStats(ticker);
 			this.logger.write(`${ticker.eventTime}\t${ticker.bestAsk}\t${ticker.bestBid}\t${this.ma[0]}\t${this.ma[1]}\t${this.std[0]}\t${this.std[1]}\n`)
 		}
-		if (this.count < 2 * this.wSize) {
+		if (this.count < this.wSize) {
 			// let ceil = [this.ma[0] + BOLLINGER_BAND_FACTOR * this.std[0], this.ma[1] + BOLLINGER_BAND_FACTOR * this.std[1]];
 			// let floor = [this.ma[0] - BOLLINGER_BAND_FACTOR * this.std[0], this.ma[1] - BOLLINGER_BAND_FACTOR * this.std[1]];
 			// console.log(`${ticker.eventTime}\t${ticker.bestAsk}\t${floor[0]}\t${this.ma[0]}\t${ceil[0]}\t${ticker.bestBid}\t${floor[1]}\t${this.ma[1]}\t${ceil[1]}\n`);
-			console.log("Trading begins in: " + (2*this.wSize - this.count));
+			console.log("Trading begins in: " + (this.wSize - this.count));
 		}
 		console.log(`${ticker.eventTime}\t${ticker.bestAsk}\t${floor[0]}\t${this.ma[0]}\t${ceil[0]}\t${ticker.bestBid.toString()}\t${floor[1]}\t${this.ma[1]}\t${ceil[1]}\n`);
 	}
@@ -59,7 +59,7 @@ export default class DataEngine {
 		let u = this.calcAvg();
 		this.ma = (USE_SMA || (this.ma[0] == null || this.ma[1] == null)) ? u : this.calcEma(ticker.bestAsk, ticker.bestBid);
 		this.std = this.calcStd(u);
-		if (this.count >= 2 * this.wSize) {
+		if (this.count >= this.wSize) {
 			this.tradeSubject.next(new TradeData(ticker.eventTime, ticker.bestAsk, ticker.bestBid, this.ma, this.std));
 		}		
 		// this.askSubject.next(new StatData(ticker.bestAsk, this.ma[0], this.std[0]));

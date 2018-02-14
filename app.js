@@ -22,11 +22,11 @@ const client = Binance({
 /**************************************/
 export const TradeParams = Object.freeze({
 	SYMBOL: 'BNBUSDT',
-	IS_SIMULATION: true,
-	INITIAL_POSITION: Position.SELL,
+	IS_SIMULATION: false,
+	INITIAL_POSITION: Position.BUY,
 	MIN_PERCENT_GAIN: 0.20,
-	TRADE_QTY: 50,
-	WINDOW_SIZE_S: 240
+	TRADE_QTY: 20,
+	WINDOW_SIZE_S: 300
 });
 
 
