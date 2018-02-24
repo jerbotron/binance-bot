@@ -52,6 +52,7 @@ export default class DataEngine {
 			// console.log(`${ticker.eventTime}\t${ticker.bestAsk}\t${floor[0]}\t${this.ma[0]}\t${ceil[0]}\t${ticker.bestBid}\t${floor[1]}\t${this.ma[1]}\t${ceil[1]}\n`);
 			console.log("Trading begins in: " + (this.wSize - this.count));
 		}
+		console.log(`${ticker.eventTime}\t${ticker.bestAsk}\t${floor[0]}\t${this.ma[0]}\t${ceil[0]}\t${ticker.bestBid.toString()}\t${floor[1]}\t${this.ma[1]}\t${ceil[1]}\n`);
 	}
 
 	calculateStats(ticker) {

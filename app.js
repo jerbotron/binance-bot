@@ -13,8 +13,8 @@ import Binance from 'binance-api-node'
 const CONFIG = require("./config.json");
 
 const client = Binance({
-	apiKey: CONFIG.API_KEY,
-	apiSecret: CONFIG.API_SECRET
+    apiKey: CONFIG.API_KEY,
+    apiSecret: CONFIG.API_SECRET
 });
 
 /**************************************/
@@ -29,10 +29,12 @@ export const TradeParams = Object.freeze({
 	WINDOW_SIZE_S: 300
 });
 
+
 const msgBot 		= new AlertBot();
 const dataEngine 	= new DataEngine(msgBot);
 const tracker 		= new Tracker(client, dataEngine, msgBot);
 const autoTrader 	= new AutoTrader(client, dataEngine, tracker, msgBot);
+
 
 autoTrader.start();
 console.log(TradeParams);
@@ -40,8 +42,8 @@ console.log(TradeParams);
 app.listen(8080, () => console.log('Jerbotron webhook listening on port 8080...'));
 
 process.on("SIGINT", () => {
-	msgBot.exit();
-	autoTrader.stop();
-	tracker.stop();
-	process.exit(0);
+    msgBot.exit();
+    autoTrader.stop();
+    tracker.stop();
+    process.exit(0);
 });
