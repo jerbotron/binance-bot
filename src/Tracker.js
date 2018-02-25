@@ -11,7 +11,6 @@ import {
 } from './Utils.js';
 import TickerData from './data/TickerData.js'
 import TradeSum from './data/TradeSum.js'
-import DataEngine from './DataEngine.js'
 import AutoTrader from './AutoTrader.js'
 
 export default class Tracker {
@@ -20,16 +19,19 @@ export default class Tracker {
 		this.client = client;
 		this.dataEngine = dataEngine;
 		this.msgBot = msgBot;
-		// this.fStream = fs.createWriteStream('log.txt');
+		// this.fStream = fs.createWriteStream('./logs/trades.txt');
 	}
 
 	stop() {
-		// this.fStream.end();
+		if (this.fStream) {
+			this.fStream.end();
+		}
 	}
 
 	trackTrades(products) {
 		this.client.ws.trades(products, trade => {
-			this.printTrade(trade);
+			// this.printTrade(trade);
+			this.dataEngine.enqueueTrade(trade);
 		})
 	}
 
@@ -37,13 +39,7 @@ export default class Tracker {
 		// const logger = fs.createWriteStream(`logs/${getDate()}/${symbol}.txt`);
 		this.client.ws.ticker(symbol, ticker => {
 			// logger.write(`${msToS(ticker.eventTime)}\t${ticker.bestAsk}\t${ticker.bestBid}\n`);
-			this.dataEngine.enqueue(ticker);
-		});
-	}
-
-	trackAllTickers() {
-		this.client.ws.allTickers(products => {
-			console.log(products);
+			this.dataEngine.enqueueTicker(ticker);
 		});
 	}
 
@@ -66,57 +62,9 @@ export default class Tracker {
 		});
 	}
 
-	getMWA(product, wSize) {
-		let mwaArr = new Array(wSize);
-		let startTimestamp = undefined;
-		let lastMWA = undefined;
-		this.client.ws.trades([product], trade => {
-			if (trade.eventType == 'aggTrade') {
-				// this.printTrade(trade);
-				let timestamp = msToS(trade.eventTime);
-
-				if (!startTimestamp) {
-					startTimestamp = timestamp;
-				} else if ((timestamp - startTimestamp) >= wSize) {
-					lastMWA = this.printMWA(mwaArr, lastMWA);
-					for (let i = startTimestamp; i <= timestamp - wSize; i++) {
-						mwaArr[i % wSize] = undefined;
-					}
-					startTimestamp++;
-				}
-
-				let index = timestamp % wSize;
-				if (mwaArr[index] == undefined) {
-					mwaArr[index] = new TradeSum(trade.price, trade.quantity);
-				} else {
-					mwaArr[index].addTrade(trade.price, trade.quantity);
-				}
-			}
-		});
-	}
-
-	printMWA(mwaArr, lastMWA) {
-		let priceSum = 0;
-		let size = 0;
-		mwaArr.forEach(tradeSum => {
-			if (tradeSum) {
-				priceSum += tradeSum.getPriceSum();
-				size += tradeSum.getSize();
-			}
-		});
-
-		let currMWA = priceSum / size;
-		let percentChange = (lastMWA) ? (currMWA - lastMWA) / lastMWA * 100 : 0;
-		// console.log(`PriceSum: ${priceSum} \t Size: ${size} \tMWA: ${currMWA}`);
-		let msg = `MWA: ${currMWA}\tPercentChange: ${percentChange}`;
-		console.log(msg);
-		this.msgBot.say(msg);
-		return currMWA;
-	}
-
 	printTrade(trade) {
-		// console.log(`${msToS(trade.eventTime)} \t${trade.price} \t${trade.quantity}`);
-		let msg = `Time: ${msToS(trade.eventTime)} \tPrice: ${trade.price} \t Size: ${trade.quantity}`;
-		console.log(msg);
+		console.log(`${msToS(trade.eventTime)}\t${trade.price}\t${trade.quantity}`);
+		// let msg = `Time: ${msToS(trade.eventTime)} \tPrice: ${trade.price} \t Size: ${trade.quantity}`;
+		// console.log(msg);
 	}
 }

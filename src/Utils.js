@@ -19,4 +19,38 @@ function getDate() {
 	return new Date().toISOString().slice(0,10);
 }
 
-export { isBaseEth, msToS, msToMin, getDate }
+function getPercentGain(sell, buy, feePercent) {
+	return ((1-feePercent) * sell - (1+feePercent) * buy)/buy*100;
+}
+
+// n must be a string
+function increaseLowestDigit(n, symbol) {
+	let d = 1;
+	for (let i = n.length-1; i >= 0; i--) {
+		if (n.charAt(i) == '.') {
+			d = n.length - 1 - i;
+			break;
+		}
+	}
+	return (Number(n) + 1/Math.pow(10, d)).toFixed(8);
+}
+
+// n must be a string
+function decreaseLowestDigit(n, symbol) {
+	let d = 1;
+	for (let i = n.length-1; i >= 0; i--) {
+		if (n.charAt(i) == '.') {
+			d = n.length - 1 - i
+			break;
+		}
+	}
+	return (Number(n) - 1/Math.pow(10, d)).toFixed(8);
+}
+
+export { 
+	isBaseEth, 
+	msToS, 
+	msToMin, 
+	getDate,
+	getPercentGain 
+}

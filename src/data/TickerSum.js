@@ -4,34 +4,34 @@
 
 export default class TickerSum {
 	constructor() {
-		this.askSum = 0;
-		this.bidSum = 0;
-		this.size = 0;
+		this._askSum = 0;
+		this._bidSum = 0;
+		this._size = 0;
 	}
 
-	getAskSum() {
-		return this.askSum;
+	get askSum() {
+		return this._askSum;
 	}
 
-	getBidSum() {
-		return this.bidSum;
+	get bidSum() {
+		return this._bidSum;
 	}
 
-	getSize() {
-		return this.size;
+	get size() {
+		return this._size;
 	}
 
 	addTicker(ask, bid) {
-		this.askSum += parseFloat(ask);
-		this.bidSum += parseFloat(bid);
-		this.size++;
+		this._askSum += Number(ask);
+		this._bidSum += Number(bid);
+		this._size++;
 	}
 
 	getAskAvg() {
-		return this.askSum / this.size;
+		return this._askSum/this._size;
 	}
 
 	getBidAvg() {
-		return this.bidSum / this.size;
+		return this._bidSum/this._size;
 	}
 }

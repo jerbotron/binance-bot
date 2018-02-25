@@ -21,23 +21,23 @@ const client = Binance({
 /** EDIT PARAMS BELOW BEFORE TRADING **/
 /**************************************/
 export const TradeParams = Object.freeze({
-	SYMBOL: 'BNBUSDT',
+	SYMBOL: 'ETHUSDT',
 	IS_SIMULATION: false,
-	INITIAL_POSITION: Position.BUY,
-	MIN_PERCENT_GAIN: 0.20,
-	TRADE_QTY: 20,
-	WINDOW_SIZE_S: 300
+	INITIAL_POSITION: Position.SELL,
+	MIN_PERCENT_GAIN: 0.35,
+	TRADE_QTY: 1,
+	WINDOW_SIZE_S: 900
 });
 
-
-const msgBot 		= new AlertBot();
-const dataEngine 	= new DataEngine(msgBot);
-const tracker 		= new Tracker(client, dataEngine, msgBot);
-const autoTrader 	= new AutoTrader(client, dataEngine, tracker, msgBot);
-
-
+const msgBot = new AlertBot();
+const dataEngine = new DataEngine(msgBot);
+const tracker = new Tracker(client, dataEngine, msgBot);
+const autoTrader = new AutoTrader(client, dataEngine, tracker, msgBot);
 autoTrader.start();
 console.log(TradeParams);
+
+// tracker.trackTicker('BNBUSDT');
+// tracker.trackTrades(['ETHUSDT']);
 
 app.listen(8080, () => console.log('Jerbotron webhook listening on port 8080...'));
 

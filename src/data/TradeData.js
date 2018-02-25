@@ -6,74 +6,52 @@ import { BOLLINGER_BAND_FACTOR } from '../Constants.js'
 
 export default class TradeData {
 
-	// maArr = [askMa, bidMa], stdArr = [askStd, bidStd]
-	constructor(timestamp, ask, bid, maArr, stdArr) {
-		this._timestamp = timestamp;
-		this._ask = Number(ask);
-		this._bid = Number(bid);
-		this._maArr = maArr;
-		this._stdArr = stdArr;
+	constructor(timestamp, price, ma, std) {
+		this._timestamp = parseInt(timestamp);
+		this._price = Number(price);
+		this._ma = Number(ma);
+		this._std = Number(std);
+		this._floor = this._ma - BOLLINGER_BAND_FACTOR * this._std;
+		this._ceil = this._ma + BOLLINGER_BAND_FACTOR * this._std;
 	}
 
 	get timestamp() {
 		return this._timestamp;
 	}
 
-	get ask() {
-		return this._ask;
+	get price() {
+		return this._price;
 	}
 
-	get bid() {
-		return this._bid;
+	get ma() {
+		return this._ma;
 	}
 
-	get askMa() {
-		return this._maArr[0];
+	get std() {
+		return this._std;
 	}
 
-	get bidMa() {
-		return this._maArr[1];
+	get floor() {
+		return this._floor;
 	}
 
-	get askSTD() {
-		return this._stdArr[0];
+	get ceil() {
+		return this._ceil;
 	}
 
-	get bidStd() {
-		return this._stdArr[1];
+	getSpread() {
+		return this._ceil - this._floor;
 	}
 
-	getAskSpread() {
-		return 2 * BOLLINGER_BAND_FACTOR * this._stdArr[0];
+	getPercentile(percent) {
+		return this._floor + percent/100 * this.getSpread();
 	}
 
-	getBuySpread() {
-		return 2 * BOLLINGER_BAND_FACTOR * this._stdArr[1];
+	getP90() {
+		return this.getPercentile(90);
 	}
 
-	getAskP90() {
-		return this.getAskPercentile(90);
-	}
-
-	getBuyP90() {
-		return this.getBuyPercentile(90);
-	}
-
-	getAskP10() {
-		return this.getAskPercentile(10);
-	}
-
-	getBuyP10() {
-		return this.getBuyPercentile(10);
-	}
-
-	getAskPercentile(percent) {
-		let floor = this._maArr[0] - 2 * this._stdArr[0];
-		return (floor + percent/100 * this.getAskSpread());
-	}
-
-	getBuyPercentile(percent) {
-		let floor = this._maArr[1] - 2 * this._stdArr[1];
-		return (floor + percent/100 * this.getBuySpread());
+	getP10() {
+		return this.getPercentile(10);
 	}
 }

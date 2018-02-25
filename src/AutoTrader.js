@@ -3,23 +3,12 @@
 "use strict";
 
 import Rx from 'rxjs/Rx'
-import DataEngine from './DataEngine.js'
-import fs from 'fs';
-import { getDate } from './Utils.js';
 import { 
 	Position,
-	OrderStatus,
-	OrderType,
-	FilterType
+	OrderType
 } from './Constants.js'
-import Balance from './data/Balance.js'
+import OrderManager from './OrderManager.js'
 import { TradeParams } from '../app.js'
-
-const ORDER_POLLING_TIMEOUT_MS = 30000;
-const ORDER_POLLING_INTERVAL_MS = 500;
-
-const BOLLINGER_BAND_FACTOR = 2;
-const FEE_PERCENT = 0.05/100; 			// Assuming user has BNB in account
 
 export default class AutoTrader {
 
@@ -29,25 +18,14 @@ export default class AutoTrader {
 		this.tracker = tracker;
 		this.msgBot = msgBot;
 		this.client = client;
-		this.logger = fs.createWriteStream(`logs/${getDate()}/${this.symbol}_trades.txt`);
+		this.orderManager = new OrderManager(this, client, this.symbol, msgBot);
 
-		this.prevAskTicker = null;
-		this.prevBuyTicker = null;
-		this.lastBoughtPrice = null;
-		this.lastSoldPrice = null;
+		this.prevPrice = null;
 		this.baseBalance = null;
 		this.quoteBalance = null;
 
-		this.cumulativeGain = 1;
-		this.tradeQty = TradeParams.TRADE_QTY;
-		this.isPartiallyFilled = false;
-
-		this._MIN_TICK = null;
-		this._MIN_QTY = null;
-		this._MIN_NOTIONAL = null;
-		this._PRECISION = null;
-		this._BASE = null;		// first asset in symbol
-		this._QUOTE = null;		// second asset in symbol
+		this.tickerAsk = null;
+		this.tickerBid = null; 
 
 		this.init();
 	}
@@ -63,92 +41,93 @@ export default class AutoTrader {
 	}
 
 	initTradeInfo(symbols) {
-		for (let i = 0; i < symbols.length; i++) {
-			if (symbols[i].symbol == this.symbol) {
-				this._BASE = symbols[i].baseAsset;
-				this._QUOTE = symbols[i].quoteAsset;
-				this._PRECISION = Number(symbols[i].baseAssetPrecision);
-				symbols[i].filters.forEach(filter => {
-					if (filter.filterType == FilterType.PRICE_FILTER) {
-						this._MIN_TICK = Number(Number(filter.tickSize).toFixed(8));
-					}
-					else if (filter.filterType == FilterType.LOT_SIZE) {
-						this._MIN_QTY = Number(Number(filter.minQty).toFixed(8));
-					} 
-					else if (filter.filterType == FilterType.MIN_NOTIONAL) {
-						this._MIN_NOTIONAL = Number(Number(filter.minNotional).toFixed(8));
-					}
-				});
-				break;
-			}
-		}
+		this.orderManager.init(symbols);
 	}
 
 	initAccountInfo(balances) {
-		balances.forEach(balance => {
-			if (balance.asset == this._BASE) {
-				this.baseBalance = new Balance(balance.asset, balance.free);
-			} else if (balance.asset == this._QUOTE) {
-				this.quoteBalance = new Balance(balance.asset, balance.free);
-			}
-		});
+		this.orderManager.setBalances(balances);
 	}
 
 	start() {
 		this.subscribeTrade();
-		this.tracker.trackTicker(this.symbol);
+		this.subscribeTicker();
+		// this.tracker.trackTicker(this.symbol);
+		this.tracker.trackTrades([this.symbol]);
 	}
 
 	stop() {
+		this.tracker.stop();
 		this.unsubscribeTrade();
+		this.unsubscribeTicker();
+	}
+
+	setPosition(position) {
+		this.position = position;
+	}
+
+	togglePosition(currentPosition) {
+		this.position = (currentPosition == Position.BUY) ? Position.SELL : Position.BUY;
 	}
 
 	subscribeTrade() {
 		this.tradeSubscription = this.dataEngine.alertPriceChange()
-											  .subscribeOn(Rx.Scheduler.asap)
-											  .observeOn(Rx.Scheduler.queue)
-											  .subscribe(this.autoTrade());
+											  	.subscribeOn(Rx.Scheduler.asap)
+											  	.observeOn(Rx.Scheduler.queue)
+											  	.subscribe(this.autoTrade());
+	}
+
+	subscribeTicker() {
+		this.tickerSubscription = this.dataEngine.alertTickerChange()
+												 .subscribeOn(Rx.Scheduler.asap)
+											  	 .observeOn(Rx.Scheduler.queue)
+											  	 .subscribe(this.updateTickers());
 	}
 
 	unsubscribeTrade() {
 		this.tradeSubscription.unsubscribe();
 	}
 
+	unsubscribeTicker() {
+		this.tickerSubscription.unsubscribe();
+	}
+
+	updateTickers() {
+		return Rx.Subscriber.create(
+			// x = TickerData object
+			x => {
+				this.tickerAsk = x.ask;
+				this.tickerBid = x.bid;
+				this.orderManager.updateTickers(x);
+			},
+			e => {
+				console.log(`onError: ${e}`);
+				this.msgBot.say(`onError: ${e}`);
+			},
+			() => {
+				console.log('onCompleted');
+			}
+		);
+	}
+
 	autoTrade() {
 		return Rx.Subscriber.create(
-			// x = TradeData obj
+			// x = TradeData object
 			x => {
 				switch (this.position) {					
 					case Position.BUY: {						
-						let price = Number((x.bid + this._MIN_TICK).toFixed(this._PRECISION));
-						if (this.shouldBuy_1(x, price)) 
+						if (this.shouldBuy_3(x)) 
 						{
-							let maxQty = Number((this.quoteBalance.qty / price).toFixed(this._PRECISION));
-							this.tradeQty = (this.tradeQty > maxQty) ? maxQty : this.tradeQty;
-							if (this.isBelowMinimumNotional(this.tradeQty, price)) {
-								this.position = Position.SELL;
-								this.tradeQty = TradeParams.TRADE_QTY;
-							} else {
-								this.buy(price, Number(this.tradeQty.toFixed(this._PRECISION)), OrderType.LIMIT);
-							}							
+							this.orderManager.executeBuy(x.price);							
 						}
-						this.prevBuyTicker = x.bid;
+						this.prevPrice = x.price;
 						break;
 					}
 					case Position.SELL: {
-						let price = Number((x.ask - this._MIN_TICK).toFixed(this._PRECISION));
-						let percentGain = (this.lastBoughtPrice) ? getPercentGain(price, this.lastBoughtPrice, FEE_PERCENT) :  null;
-						if (this.shouldSell_1(x, price, percentGain))
+						if (this.shouldSell_3(x))
 						{
-							this.tradeQty = (this.tradeQty > this.baseBalance.qty) ? this.baseBalance.qty : this.tradeQty;
-							if (this.isBelowMinimumNotional(this.tradeQty, price)) {
-								this.position = Position.BUY;
-								this.tradeQty = TradeParams.TRADE_QTY;
-							} else {
-								this.sell(price, Number(this.tradeQty.toFixed(this._PRECISION)), OrderType.LIMIT);
-							}
+							this.orderManager.executeSell(x.price);
 						}
-						this.prevAskTicker = x.ask;
+						this.prevPrice = x.price;
 						break;
 					}
 					case Position.PENDING:
@@ -166,141 +145,46 @@ export default class AutoTrader {
 		);
 	}
 
-	shouldBuy_1(x, price) {
-		let floor = x.bidMa - BOLLINGER_BAND_FACTOR * x.bidStd;
-		console.log(`${x.timestamp}\t${this.position}\t${price}\t${floor}\t${x.bidMa}\t${this.tradeQty}`);
-		return x.bid >= this.prevBuyTicker && 
-				x.bid > floor &&  
-				price < x.bidMa;
+	shouldBuy_1(x) {
+		console.log(`${x.timestamp}\t${this.position}\t${x.price}\t${x.floor}\t${x.ma}`);
+		return x.price >= this.prevPrice &&
+			   x.price > x.floor &&
+			   x.price < x.ma;
 	}
 
-	shouldBuy_2(x, price) {
-		let floor = x.bidMa - BOLLINGER_BAND_FACTOR * x.bidStd;
-		console.log(`${x.timestamp}\t${this.position}\t${price}\t${floor}\t${x.bidMa-x.bidStd}\t${this.tradeQty}`);
-		return x.bid > floor &&  
-				price < (x.bidMa - x.bidStd);
+	shouldBuy_2(x) {
+		console.log(`${x.timestamp}\t${this.position}\t${x.price}\t${x.floor}\t${x.ma-x.std}`);
+		return x.price > x.floor && 
+			   x.price < (x.ma - x.std);
 	}
 
-	shouldBuy_3(x, price) {
-		console.log(`${x.timestamp}\t${this.position}\t${price}\t${x.getBuyP10()}\t${this.tradeQty}`);
-		return price <= x.getBuyP10() && price >= this.prevBuyTicker;
+	shouldBuy_3(x) {
+		console.log(`${x.timestamp}\t${this.position}\t${x.price}\t${x.getP10()}`);
+		return x.price <= x.getP10() && 
+			   x.price >= this.prevPrice;
 	}
 
-	shouldSell_1(x, price, percentGain) {
-		console.log(`${x.timestamp}\t${this.position}\t${price}\t${this.lastBoughtPrice}\t${percentGain}\t${x.askMa}\t${this.tradeQty}`);
-		return price <= this.prevAskTicker && 
-				(percentGain == null || percentGain >= TradeParams.MIN_PERCENT_GAIN) && 
-				price > x.askMa;
+	shouldSell_1(x) {
+		let percentGain = this.orderManager.getPercentGain(x.price);
+		console.log(`${x.timestamp}\t${this.position}\t${price}\t${x.ma}\t${percentGain}`);
+		return x.price <= this.prevPrice &&
+			   (percentGain == null || percentGain >= TradeParams.MIN_PERCENT_GAIN) && 
+			   x.price > x.ma;
 	}
 
-	shouldSell_2(x, price, percentGain) {
-		console.log(`${x.timestamp}\t${this.position}\t${price}\t${this.lastBoughtPrice}\t${percentGain}\t${x.askMa+x.askStd}\t${this.tradeQty}`);
+	shouldSell_2(x) {
+		let percentGain = this.orderManager.getPercentGain(x.price);
+		console.log(`${x.timestamp}\t${this.position}\t${x.price}\t${x.ma+x.std}\t${percentGain}`);
 		return (percentGain == null || percentGain >= TradeParams.MIN_PERCENT_GAIN) && 
-				price > x.askMa + x.askStd;
+				x.price > x.ma + x.std;
 	}
 
-	shouldSell_3(x, price, percentGain) {
-		console.log(`${x.timestamp}\t${this.position}\t${price}\t${x.getAskP90()}\t${percentGain}\t${this.tradeQty}`);
-		return price >= x.getAskP90() && 
-				price <= this.prevAskTicker &&
-				(percentGain == null || percentGain >= TradeParams.MIN_PERCENT_GAIN);
-	}
-
-	isBelowMinimumNotional(qty, price) {
-		if (Number((qty*price).toFixed(this._PRECISION)) < this._MIN_NOTIONAL) {
-			console.log("Changing position due to minimum notional");
-			this.msgBot.say("Changing position due to minimum notional");
-			return true;
-		}
-		return false;
-	}
-
-	async sell(price, qty, type = OrderType.MARKET) {
-		console.log(`Executing SELL of ${this.symbol} at ${price} of ${qty} shares`);
-		this.msgBot.say(`Executing SELL of ${this.symbol} at ${price} of ${qty} shares`);
-		if (TradeParams.IS_SIMULATION) {
-			this.position = Position.BUY;
-			return;
-		}
-		this.position = Position.PENDING;
-		try {
-			let order = {
-				symbol: this.symbol,
-				side: 'SELL',
-				type: type,
-				quantity: qty
-			}
-			if (type == OrderType.LIMIT) {
-				order.price = price;
-			}
-			let res = await this.client.order(order);
-			this.logger.write(`SELL\t${res.transactTime}\t${res.clientOrderId}\t${res.price}\t${res.origQty}\t${res.executedQty}\n`);
-			this.waitForOrder(Position.SELL, res.clientOrderId);
-		} catch(e) {
-			console.log(e);
-			this.msgBot.say("Errored in sell()");
-		}
-	}
-
-	async buy(price, qty, type = OrderType.MARKET) {
-		console.log(`Executing BUY of ${this.symbol} at ${price} of ${qty} shares`);
-		this.msgBot.say(`Executing BUY of ${this.symbol} at ${price} of ${qty} shares`);
-		if (TradeParams.IS_SIMULATION) {
-			this.position = Position.SELL;
-			return;
-		}
-		this.position = Position.PENDING;
-		try {
-			let order = {
-				symbol: this.symbol,
-				side: 'BUY',
-				type: type,
-				quantity: qty
-			}
-			if (type == OrderType.LIMIT) {
-				order.price = price;
-			}
-			let res = await this.client.order(order);
-			this.logger.write(`BUY\t${res.transactTime}\t${res.clientOrderId}\t${res.price}\t${res.origQty}\t${res.executedQty}\n`);
-			this.waitForOrder(Position.BUY, res.clientOrderId);
-		} catch(e) {
-			console.log(e);
-			this.msgBot.say("Errored in buy()");
-		}
-	}
-
-	async cancel(orderId) {
-		try {
-			console.log(`Cancelling order: ${orderId}`);
-			await this.client.cancelOrder({
-				symbol: this.symbol,
-				origClientOrderId: orderId
-			});
-		} catch(e) {
-			console.log(e);
-			this.msgBot.say("Errored in cancel()");
-		}
-	}
-
-	async getOrder(orderId) {
-		try {
-			return await this.client.getOrder({
-				symbol: this.symbol,
-				origClientOrderId: orderId
-			});
-		} catch(e) {
-			console.log(e);
-			this.msgBot.say("Errored in getOrder()");
-		}
-	}
-
-	async getBook() {
-		try {
-			return await this.client.book({symbol: this.symbol});
-		} catch(e) {
-			console.log(e);
-			this.msgBot.say("Errored in getBook()");
-		}
+	shouldSell_3(x) {
+		let percentGain = this.orderManager.getPercentGain(x.price);
+		console.log(`${x.timestamp}\t${this.position}\t${x.price}\t${x.getP90()}\t${percentGain}`);
+		return x.price >= x.getP90() && 
+			   x.price <= this.prevPrice &&
+			   (percentGain == null || percentGain >= TradeParams.MIN_PERCENT_GAIN);
 	}
 
 	async getExchangeInfo() {
@@ -317,7 +201,7 @@ export default class AutoTrader {
 			return await this.client.accountInfo();
 		} catch(e) {
 			console.log(e);
-			this.msgBot.say("Errored in getAccountInfo()");
+			this.msgBot.say("Errored in getAccountInfo()");  
 		}
 	}
 
@@ -337,131 +221,4 @@ export default class AutoTrader {
 			console.log(e);
 		}
 	}
-
-	waitForOrder(currentPosition, orderId) {
-		this.pollOrderStatus((res) => {
-			switch (res.status) {
-				case OrderStatus.FILLED:
-					this.isPartiallyFilled = false;
-				case OrderStatus.CANCELED:
-				case OrderStatus.REJECTED:
-				case OrderStatus.EXPIRED:
-				case OrderStatus.ERRORED: {
-					return true;
-				}
-				case OrderStatus.PARTIALLY_FILLED:
-					this.isPartiallyFilled = true;
-				default:
-					return false;
-			}
-		}, currentPosition, orderId)
-		.then((res) => {
-			if (res.status == OrderStatus.FILLED || (res.status == OrderStatus.CANCELED && this.isPartiallyFilled)) {
-				let msg = "";
-				if (res.side == Position.BUY) {					
-					msg = `Bought ${res.executedQty} of ${res.symbol} @ ${res.price}`;
-					this.lastBoughtPrice = Number(res.price);
-					this.baseBalance.addQty(res.executedQty);
-					this.quoteBalance.subtractQty(Number(res.executedQty) * Number(res.price));
-				} else if (res.side == Position.SELL) {
-					msg = `Sold ${res.executedQty} of ${res.symbol} @ ${res.price}`;
-					this.baseBalance.subtractQty(res.executedQty);
-					this.quoteBalance.addQty(Number(res.executedQty) * Number(res.price));
-					if (this.lastBoughtPrice) {
-						let percentChange = getPercentGain(res.price, this.lastBoughtPrice, FEE_PERCENT);
-						this.cumulativeGain *= (1 + percentChange/100);
-						if (percentChange > 0) {
-							msg += `\nMade profit of ${percentChange}% | cumulative gain of ${(this.cumulativeGain-1)*100}%`;
-						} else {
-							msg += `\nSuffered loss of ${percentChange} | cumulative gain of ${(this.cumulativeGain-1)*100}%`;
-						}
-					}
-					this.lastSoldPrice = Number(res.price);
-				}
-				console.log(msg);
-				this.msgBot.say(msg);
-
-				// Log trade data
-				let action = (res.side == Position.BUY) ? "BOUGHT" : "SOLD";
-				this.logger.write(`${action}\t${res.time}\t${res.clientOrderId}\t${res.price}\t${res.origQty}\t${res.executedQty}\n`);
-
-				// update trade variables
-				let notional = Number(res.executedQty) * Number(res.price);
-
-				if (res.status == OrderStatus.FILLED) {
-					this.tradeQty = TradeParams.TRADE_QTY;
-					this.position = (currentPosition == Position.BUY) ? Position.SELL : Position.BUY;
-				} else {
-					this.tradeQty -= Number(res.executedQty);
-					if (this.tradeQty < this._MIN_QTY) {
-						this.position = (currentPosition == Position.BUY) ? Position.SELL : Position.BUY;
-						this.tradeQty = TradeParams.TRADE_QTY - this.tradeQty;
-					} else {
-						this.position = currentPosition;
-					}
-				}
-				this.isPartiallyFilled = false;	// reset this flag after we finish an order
-			} else if (res.status == OrderStatus.CANCELED) {
-				this.position = currentPosition;
-			}
-		})
-		.catch((e) => {
-			console.log(e);
-			this.msgBot.say("Polling errored out, restartiing polling");
-			this.waitForOrder(currentPosition, orderId);
-		});
-	}
-
-	pollOrderStatus(isOrderFinished, currentPosition, orderId) {
-		let checkCondition = (resolve, reject) => {
-			try {
-				this.getOrder(orderId).then((order) => {
-					if (isOrderFinished(order)) {
-						resolve(order);
-					} else {
-						this.getBook().then((book) => {
-							// cancel if order is out of top 2 bids/asks
-							if ((currentPosition == Position.BUY && Number(order.price) < Number(book.bids[1].price)) ||
-								(currentPosition == Position.SELL && Number(order.price) > Number(book.asks[1].price))) 
-							{
-								this.cancel(orderId);
-							}
-							setTimeout(checkCondition, ORDER_POLLING_INTERVAL_MS, resolve, reject);
-						});
-					}
-				});
-			} catch(e) {
-				reject(new Error("Polling errored out: " + e));
-			}
-		};
-		return new Promise(checkCondition);
-	}
-}
-
-function getPercentGain(sell, buy, feePercent) {
-	return ((1-feePercent) * sell - (1+feePercent) * buy)/buy*100;
-}
-
-// n must be a string
-function increaseLowestDigit(n, symbol) {
-	let d = 1;
-	for (let i = n.length-1; i >= 0; i--) {
-		if (n.charAt(i) == '.') {
-			d = n.length - 1 - i;
-			break;
-		}
-	}
-	return (Number(n) + 1/Math.pow(10, d)).toFixed(8);
-}
-
-// n must be a string
-function decreaseLowestDigit(n, symbol) {
-	let d = 1;
-	for (let i = n.length-1; i >= 0; i--) {
-		if (n.charAt(i) == '.') {
-			d = n.length - 1 - i
-			break;
-		}
-	}
-	return (Number(n) - 1/Math.pow(10, d)).toFixed(8);
 }

@@ -2,87 +2,78 @@
 
 "use strict";
 
-import fs from 'fs';
-import {
-	isBaseEth,
-	msToS,
-	msToMin
-} from '../Utils.js';
-import TickerSum from '../data/TickerSum.js'
+import { BOLLINGER_BAND_FACTOR } from '../Constants.js'
 
 export default class TickerData {
-	constructor(msgBot, symbol, wSize, alertThreshold) {
-		this.symbol = symbol;
-		this.msgBot = msgBot;
-		this.wSize = wSize;
-		this.alertThreshold = alertThreshold;
-		// this.logger = fs.createWriteStream(`logs/${this.symbol}_ticker_data.txt`);
-		this.maArr = new Array(wSize);
-		this.startTimestamp = undefined;
-		this.lastMA = undefined; // size 2 array [askMA, bidMA]
+
+	// maArr = [askMa, bidMa], stdArr = [askStd, bidStd]
+	constructor(timestamp, ask, bid, maArr, stdArr) {
+		this._timestamp = parseInt(timestamp);
+		this._ask = Number(ask);
+		this._bid = Number(bid);
+		this._maArr = maArr;
+		this._stdArr = stdArr;
 	}
 
-	enqueueTicker(ticker) {
-		let timestamp = msToMin(ticker.eventTime);
-
-		if (!this.startTimestamp) {
-			this.startTimestamp = timestamp;
-		} else if (timestamp - this.startTimestamp >= this.wSize) {
-			this.tryAlert(ticker);
-			for (let i = this.startTimestamp; i <= timestamp - this.wSize; i++) {
-				this.maArr[i % this.wSize] = undefined;
-			}
-			this.startTimestamp++;
-		}
-
-		let index = timestamp % this.wSize;
-		if (this.maArr[index] == undefined) {
-			this.maArr[index] = new TickerSum(ticker.bestAsk, ticker.bestBid);
-		} else {
-			this.maArr[index].addTicker(ticker.bestAsk, ticker.bestBid);
-		}
-
-		// this.logger.write(`${timestamp}\t${ticker.bestAsk}\t${ticker.bestAskQnt}\t${ticker.bestBid}\t${ticker.bestBidQnt}\n`)
+	get timestamp() {
+		return this._timestamp;
 	}
 
-	// return [askMA, bidMA] array
-	getMA() {
-		let totalAsk = 0;
-		let totalBid = 0;
-		let totalSize = 0;
-		this.maArr.forEach(tickerSum => {
-			if (tickerSum) {
-				totalAsk += tickerSum.getAskSum();
-				totalBid += tickerSum.getBidSum();
-				totalSize += tickerSum.getSize();
-			}
-		});
-
-		return [totalAsk / totalSize, totalBid / totalSize];
+	get ask() {
+		return this._ask;
 	}
 
-	tryAlert(ticker) {
-		if (!this.lastMA) {
-			this.lastMA = this.getMA();
-			// console.log(`Alert: ${this.symbol} first MA collected at ${this.lastMA}`);
-			return;
-		}
+	get bid() {
+		return this._bid;
+	}
 
-		let ma = this.getMA();
-		let askPercentChange = (ma[0] / this.lastMA[0] - 1) * 100;
-		let bidPercentChange = (ma[1] / this.lastMA[1] - 1) * 100;
+	get askMa() {
+		return this._maArr[0];
+	}
 
-		if (Math.abs(askPercentChange) >= this.alertThreshold) {
-			let action = (askPercentChange >= 0) ? "rose" : "dropped";
-			console.log(`Alert: ${this.symbol} ask price just ${action} by ${askPercentChange} from ${this.lastMA[0]} to ${ma[0]}`);
-			this.msgBot.say(`Alert: ${this.symbol} ask price just ${action} by ${askPercentChange} from ${this.lastMA[0]} to ${ma[0]}`);
-		}
-		if (Math.abs(bidPercentChange) >= this.alertThreshold) {
-			let action = (bidPercentChange >= 0) ? "rose" : "dropped";
-			console.log(`Alert: ${this.symbol} bid price just ${action} by ${bidPercentChange} from ${this.lastMA[1]} to ${ma[1]}`);
-			this.msgBot.say(`Alert: ${this.symbol} bid price just ${action} by ${bidPercentChange} from ${this.lastMA[1]} to ${ma[1]}`);
-		}
+	get bidMa() {
+		return this._maArr[1];
+	}
 
-		this.lastMA = ma;
+	get askSTD() {
+		return this._stdArr[0];
+	}
+
+	get bidStd() {
+		return this._stdArr[1];
+	}
+
+	getAskSpread() {
+		return 2 * BOLLINGER_BAND_FACTOR * this._stdArr[0];
+	}
+
+	getBuySpread() {
+		return 2 * BOLLINGER_BAND_FACTOR * this._stdArr[1];
+	}
+
+	getAskP90() {
+		return this.getAskPercentile(90);
+	}
+
+	getBuyP90() {
+		return this.getBuyPercentile(90);
+	}
+
+	getAskP10() {
+		return this.getAskPercentile(10);
+	}
+
+	getBuyP10() {
+		return this.getBuyPercentile(10);
+	}
+
+	getAskPercentile(percent) {
+		let floor = this._maArr[0] - 2 * this._stdArr[0];
+		return (floor + percent/100 * this.getAskSpread());
+	}
+
+	getBuyPercentile(percent) {
+		let floor = this._maArr[1] - 2 * this._stdArr[1];
+		return (floor + percent/100 * this.getBuySpread());
 	}
 }

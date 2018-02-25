@@ -3,21 +3,33 @@
 "use strict";
 
 export default class TradeSum {
-	constructor(price, size) {
-		this.priceSum = parseFloat(price) * parseFloat(size);
-		this.size = parseFloat(size);
+	constructor() {
+		this._sum = 0;
+		this._qty = 0;
+		this.prices = [];
+		this.sizes = [];
 	}
 
-	getPriceSum() {
-		return this.priceSum;
+	get sum() {
+		return this._sum;
 	}
 
-	getSize() {
-		return this.size;
+	get qty() {
+		return this._qty;
 	}
 
-	addTrade(p, s) {
-		this.priceSum += (parseFloat(p) * parseFloat(s));
-		this.size += parseFloat(s);
+	addTrade(price, qty) {
+		this._sum += (Number(price) * Number(qty));
+		this._qty += Number(qty);
+		this.prices.push(Number(price));
+		this.sizes.push(Number(qty));
+	}
+
+	getSquaredSum(u) {
+		let sum = 0;
+		for (let i = 0; i < this.prices.length; i++) {
+			sum += (Math.pow((this.prices[i] - u), 2) * this.sizes[i]);
+		}
+		return sum;
 	}
 }
