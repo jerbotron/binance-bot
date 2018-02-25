@@ -28,7 +28,7 @@ export default class OrderManager {
 		this.client = client;
 		this.msgBot = msgBot;
         this.tradeParams = tradeParams;
-        this.symbol = tradeParams.symbol;
+        this.symbol = tradeParams.SYMBOL;
         this.logger = fs.createWriteStream(`logs/${getDate()}/${this.symbol}_trades.txt`);
 
 		this.askPrice = null;
@@ -68,6 +68,8 @@ export default class OrderManager {
 				break;
 			}
 		}
+        // console.log("BASE = " + this._BASE);
+        // console.log("QUOTE = " + this._QUOTE);
 		// console.log("PRECISION = " + this._PRECISION);
 		// console.log("MIN_TICK = " + this._MIN_TICK);
 		// console.log("MIN_QTY = " + this._MIN_QTY);
