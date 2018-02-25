@@ -24,15 +24,16 @@ export const TradeParams = Object.freeze({
 	SYMBOL: 'ETHUSDT',
 	IS_SIMULATION: false,
 	INITIAL_POSITION: Position.SELL,
-	MIN_PERCENT_GAIN: 0.35,
+	MIN_PERCENT_GAIN: 0.30,
 	TRADE_QTY: 1,
-	WINDOW_SIZE_S: 900
+	WINDOW_SIZE_S: 1200
 });
 
 const msgBot = new AlertBot();
-const dataEngine = new DataEngine(msgBot);
+const dataEngine = new DataEngine(msgBot, TradeParams);
 const tracker = new Tracker(client, dataEngine, msgBot);
-const autoTrader = new AutoTrader(client, dataEngine, tracker, msgBot);
+const autoTrader = new AutoTrader(client, dataEngine, tracker, msgBot, TradeParams);
+
 autoTrader.start();
 console.log(TradeParams);
 

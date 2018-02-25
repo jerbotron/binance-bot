@@ -6,8 +6,6 @@ import fs from 'fs';
 import Rx from 'rxjs/Rx';
 import TickerData from './data/TickerData.js'
 import { getDate } from './Utils.js';
-import { TradeParams } from '../app.js'
-import { BOLLINGER_BAND_FACTOR } from './Constants.js'
 
 const USE_SMA = false;
 
@@ -17,9 +15,9 @@ const USE_SMA = false;
 */
 export default class TickerDataEngine {
 
-	constructor(msgBot) {
-		this.symbol = TradeParams.SYMBOL;
-		this.wSize = TradeParams.WINDOW_SIZE_S;
+	constructor(msgBot, tradeParams) {
+		this.symbol = tradeParams.SYMBOL;
+		this.wSize = tradeParams.WINDOW_SIZE_S;
 		this.msgBot = msgBot;
 		this.dataArr = new Array(this.wSize);
 		this.ma = [null, null];	// size 2 array [askMa, bidMa]

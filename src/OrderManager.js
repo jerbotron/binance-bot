@@ -16,21 +16,20 @@ import {
 	FilterType
 } from './Constants.js'
 import Balance from './data/Balance.js'
-import { TradeParams } from '../app.js'
 
 const ORDER_POLLING_INTERVAL_MS = 500;
 
-const BOLLINGER_BAND_FACTOR = 2;
 const FEE_PERCENT = 0.05/100; 			// Assuming user has BNB in account
 
 export default class OrderManager {
 
-	constructor(autoTrader, client, symbol, msgBot) {
+	constructor(autoTrader, client, msgBot, tradeParams) {
 		this.autoTrader = autoTrader;
 		this.client = client;
-		this.symbol = symbol;
 		this.msgBot = msgBot;
-		this.logger = fs.createWriteStream(`logs/${getDate()}/${this.symbol}_trades.txt`);
+        this.tradeParams = tradeParams;
+        this.symbol = tradeParams.symbol;
+        this.logger = fs.createWriteStream(`logs/${getDate()}/${this.symbol}_trades.txt`);
 
 		this.askPrice = null;
 		this.bidPrice = null;
@@ -38,7 +37,7 @@ export default class OrderManager {
 		this.lastSoldPrice = null;
 
 		this.cumulativeGain = 1;
-		this.tradeQty = TradeParams.TRADE_QTY;
+		this.tradeQty = tradeParams.TRADE_QTY;
 		this.isPartiallyFilled = false;
 
 		this._MIN_TICK = null;
@@ -99,7 +98,7 @@ export default class OrderManager {
 		this.tradeQty = (this.tradeQty > maxQty) ? maxQty : this.tradeQty;
 		if (this.isBelowMinimumNotional(this.tradeQty, price)) {
 			this.autoTrader.setPosition(Position.SELL);
-			this.tradeQty = TradeParams.TRADE_QTY;
+			this.tradeQty = this.tradeParams.TRADE_QTY;
 		} else {
 			this.buy(price, this.tradeQty.toPrecision(this._PRECISION), OrderType.LIMIT);
 		}
@@ -109,7 +108,7 @@ export default class OrderManager {
 		this.tradeQty = (this.tradeQty > this.baseBalance.qty) ? this.baseBalance.qty : this.tradeQty;
 		if (this.isBelowMinimumNotional(this.tradeQty, price)) {
 			this.autoTrader.setPosition(Position.BUY);
-			this.tradeQty = TradeParams.TRADE_QTY;
+			this.tradeQty = this.tradeParams.TRADE_QTY;
 		} else {
 			this.sell(price, this.tradeQty.toPrecision(this._PRECISION), OrderType.LIMIT);
 		}
@@ -118,7 +117,7 @@ export default class OrderManager {
 	async sell(price, qty, type = OrderType.MARKET) {
 		console.log(`Executing SELL of ${this.symbol} at ${price} of ${qty} shares`);
 		this.msgBot.say(`Executing SELL of ${this.symbol} at ${price} of ${qty} shares`);
-		if (TradeParams.IS_SIMULATION) {
+		if (this.tradeParams.IS_SIMULATION) {
 			this.lastSoldPrice = price;
 			this.autoTrader.setPosition(Position.BUY);
 			return;
@@ -146,7 +145,7 @@ export default class OrderManager {
 	async buy(price, qty, type = OrderType.MARKET) {
 		console.log(`Executing BUY of ${this.symbol} at ${price} of ${qty} shares`);
 		this.msgBot.say(`Executing BUY of ${this.symbol} at ${price} of ${qty} shares`);
-		if (TradeParams.IS_SIMULATION) {
+		if (this.tradeParams.IS_SIMULATION) {
 			this.lastBoughtPrice = price;
 			this.autoTrader.setPosition(Position.SELL);
 			return;
@@ -256,13 +255,13 @@ export default class OrderManager {
 				let notional = Number(res.executedQty) * Number(res.price);
 
 				if (res.status == OrderStatus.FILLED) {
-					this.tradeQty = TradeParams.TRADE_QTY;
+					this.tradeQty = this.tradeParams.TRADE_QTY;
 					this.autoTrader.togglePosition(currentPosition);
 				} else {
 					this.tradeQty -= Number(res.executedQty);
 					if (this.tradeQty < this._MIN_QTY) {
 						this.autoTrader.togglePosition(currentPosition);
-						this.tradeQty = TradeParams.TRADE_QTY - this.tradeQty;
+						this.tradeQty = this.tradeParams.TRADE_QTY - this.tradeQty;
 					} else {
 						this.autoTrader.setPosition(currentPosition);
 					}

@@ -523,6 +523,6 @@ function calcStd(data) {
 
 const dp = new DataPlotter();
 // dp.processTickerData('./logs/2018-02-12/BNBUSDT_stats.txt', 'BNBUSDT - ticker');
-dp.processRawTradeData('./logs/2018-02-19/ETHUSDT_trade_stats.txt', 'ETHUSDT - trade raw', 1200);
-// dp.processTradeData('./logs/2018-02-19/ETHUSDT_trade_stats.txt', 'ETHUSDT - trade');
+// dp.processRawTradeData('./logs/2018-02-19/ETHUSDT_trade_stats.txt', 'ETHUSDT - trade raw', 1200);
+dp.processTradeData('./logs/2018-02-25/ETHUSDT_trade_stats.txt', 'ETHUSDT - trade');
 

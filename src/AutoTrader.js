@@ -8,17 +8,17 @@ import {
 	OrderType
 } from './Constants.js'
 import OrderManager from './OrderManager.js'
-import { TradeParams } from '../app.js'
 
 export default class AutoTrader {
 
-	constructor(client, dataEngine, tracker, msgBot) {
-		this.symbol = TradeParams.SYMBOL;
+	constructor(client, dataEngine, tracker, msgBot, tradeParams) {
+        this.client = client;
 		this.dataEngine = dataEngine;
-		this.tracker = tracker;
-		this.msgBot = msgBot;
-		this.client = client;
-		this.orderManager = new OrderManager(this, client, this.symbol, msgBot);
+        this.tracker = tracker;
+        this.msgBot = msgBot;
+        this.symbol = tradeParams.SYMBOL;
+        this.tradeParams = tradeParams;
+		this.orderManager = new OrderManager(this, client, msgBot, tradeParams);
 
 		this.prevPrice = null;
 		this.baseBalance = null;
@@ -35,7 +35,7 @@ export default class AutoTrader {
 			this.initTradeInfo(res.symbols);
 			this.getAccountInfo().then(res => {
 				this.initAccountInfo(res.balances);
-				this.position = TradeParams.INITIAL_POSITION;
+				this.position = this.tradeParams.INITIAL_POSITION;
 			});
 		});
 	}
@@ -168,14 +168,14 @@ export default class AutoTrader {
 		let percentGain = this.orderManager.getPercentGain(x.price);
 		console.log(`${x.timestamp}\t${this.position}\t${price}\t${x.ma}\t${percentGain}`);
 		return x.price <= this.prevPrice &&
-			   (percentGain == null || percentGain >= TradeParams.MIN_PERCENT_GAIN) && 
+			   (percentGain == null || percentGain >= this.tradeParams.MIN_PERCENT_GAIN) &&
 			   x.price > x.ma;
 	}
 
 	shouldSell_2(x) {
 		let percentGain = this.orderManager.getPercentGain(x.price);
 		console.log(`${x.timestamp}\t${this.position}\t${x.price}\t${x.ma+x.std}\t${percentGain}`);
-		return (percentGain == null || percentGain >= TradeParams.MIN_PERCENT_GAIN) && 
+		return (percentGain == null || percentGain >= this.tradeParams.MIN_PERCENT_GAIN) &&
 				x.price > x.ma + x.std;
 	}
 
@@ -184,7 +184,7 @@ export default class AutoTrader {
 		console.log(`${x.timestamp}\t${this.position}\t${x.price}\t${x.getP90()}\t${percentGain}`);
 		return x.price >= x.getP90() && 
 			   x.price <= this.prevPrice &&
-			   (percentGain == null || percentGain >= TradeParams.MIN_PERCENT_GAIN);
+			   (percentGain == null || percentGain >= this.tradeParams.MIN_PERCENT_GAIN);
 	}
 
 	async getExchangeInfo() {

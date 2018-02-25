@@ -11,8 +11,6 @@ import {
 	msToS,
 	getDate 
 } from './Utils.js';
-import { TradeParams } from '../app.js'
-import { BOLLINGER_BAND_FACTOR } from './Constants.js'
 
 /*
 	Collect trade data for a single coin, analyze the data in real time and 
@@ -20,9 +18,9 @@ import { BOLLINGER_BAND_FACTOR } from './Constants.js'
 */
 export default class DataEngine {
 
-	constructor(msgBot) {
-		this.symbol = TradeParams.SYMBOL;
-		this.wSize = TradeParams.WINDOW_SIZE_S;
+	constructor(msgBot, tradeParams) {
+		this.symbol = tradeParams.SYMBOL;
+		this.wSize = tradeParams.WINDOW_SIZE_S;
 		this.msgBot = msgBot;
 		this.startTimestamp = null;
 		this.dataMap = new Map();

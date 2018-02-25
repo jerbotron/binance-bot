@@ -2,7 +2,6 @@
 
 "use strict";
 
-import fs from 'fs';
 import {
 	isBaseEth,
 	msToS,
@@ -10,8 +9,6 @@ import {
 	getDate
 } from './Utils.js';
 import TickerData from './data/TickerData.js'
-import TradeSum from './data/TradeSum.js'
-import AutoTrader from './AutoTrader.js'
 
 export default class Tracker {
 
