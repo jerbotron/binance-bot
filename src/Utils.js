@@ -23,6 +23,10 @@ function getPercentGain(sell, buy, feePercent) {
 	return ((1-feePercent) * sell - (1+feePercent) * buy)/buy*100;
 }
 
+function round(n, precision) {
+	return Number(n.toPrecision(precision));
+}
+
 // n must be a string
 function increaseLowestDigit(n, symbol) {
 	let d = 1;
@@ -52,5 +56,6 @@ export {
 	msToS, 
 	msToMin, 
 	getDate,
-	getPercentGain 
+	getPercentGain,
+	round
 }

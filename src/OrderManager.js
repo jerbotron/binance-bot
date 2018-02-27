@@ -7,7 +7,8 @@ import {
 	getDate
 } from './Utils.js';
 import { 
-	getPercentGain
+	getPercentGain,
+	round
 } from './Utils.js';
 import { 
 	Position,
@@ -56,13 +57,13 @@ export default class OrderManager {
 				this._PRECISION = Number(symbols[i].baseAssetPrecision);
 				symbols[i].filters.forEach(filter => {
 					if (filter.filterType == FilterType.PRICE_FILTER) {
-						this._MIN_TICK = Number(filter.tickSize).toPrecision(this._PRECISION);
+						this._MIN_TICK = Number(filter.tickSize);
 					}
 					else if (filter.filterType == FilterType.LOT_SIZE) {
-						this._MIN_QTY = Number(filter.minQty).toPrecision(this._PRECISION);
+						this._MIN_QTY = Number(filter.minQty);
 					} 
 					else if (filter.filterType == FilterType.MIN_NOTIONAL) {
-						this._MIN_NOTIONAL = Number(filter.minNotional).toPrecision(this._PRECISION);
+						this._MIN_NOTIONAL = Number(filter.minNotional);
 					}
 				});
 				break;
@@ -96,13 +97,13 @@ export default class OrderManager {
 	}
 
 	executeBuy(price) {
-		let maxQty = (this.quoteBalance.qty / price).toPrecision(this._PRECISION);
+		let maxQty = this.quoteBalance.qty / price;
 		this.tradeQty = (this.tradeQty > maxQty) ? maxQty : this.tradeQty;
 		if (this.isBelowMinimumNotional(this.tradeQty, price)) {
 			this.autoTrader.setPosition(Position.SELL);
 			this.tradeQty = this.tradeParams.TRADE_QTY;
 		} else {
-			this.buy(price, this.tradeQty.toPrecision(this._PRECISION), OrderType.LIMIT);
+			this.buy(price, round(this.tradeQty, this._PRECISION), OrderType.LIMIT);
 		}
 	}
 
@@ -112,7 +113,7 @@ export default class OrderManager {
 			this.autoTrader.setPosition(Position.BUY);
 			this.tradeQty = this.tradeParams.TRADE_QTY;
 		} else {
-			this.sell(price, this.tradeQty.toPrecision(this._PRECISION), OrderType.LIMIT);
+			this.sell(price, round(this.tradeQty, this._PRECISION), OrderType.LIMIT);
 		}
 	}
 
@@ -306,7 +307,7 @@ export default class OrderManager {
 	}
 
 	isBelowMinimumNotional(qty, price) {
-		if ((qty*price).toPrecision(this._PRECISION) < this._MIN_NOTIONAL) {
+		if (round(qty*price, this._PRECISION) < this._MIN_NOTIONAL) {
 			console.log("Changing position due to minimum notional");
 			this.msgBot.say("Changing position due to minimum notional");
 			return true;

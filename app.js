@@ -25,7 +25,7 @@ export const TradeParams = Object.freeze({
 	IS_SIMULATION: false,
 	INITIAL_POSITION: Position.BUY,
 	MIN_PERCENT_GAIN: 0.30,
-	TRADE_QTY: 2,
+	TRADE_QTY: 1,
 	WINDOW_SIZE_S: 1200
 });
 
