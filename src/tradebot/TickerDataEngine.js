@@ -4,13 +4,13 @@
 
 import fs from 'fs';
 import Rx from 'rxjs/Rx';
-import TickerData from './data/TickerData.js'
-import { getDate } from './Utils.js';
+import TickerData from '../dto/TickerData.js'
+import { getDate } from '../common/Utils.js';
 
 const USE_SMA = false;
 
 /*
-	Collect ticker data for a single coin, analyze the data in real time and 
+	Collect ticker dto for a single coin, analyze the dto in real time and
 	emit trade signals and alerts
 */
 export default class TickerDataEngine {

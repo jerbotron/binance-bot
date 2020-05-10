@@ -5,18 +5,18 @@
 import fs from 'fs';
 import { 
 	getDate
-} from './Utils.js';
+} from '../common/Utils.js';
 import { 
 	getPercentGain,
 	round
-} from './Utils.js';
+} from '../common/Utils.js';
 import { 
 	Position,
 	OrderStatus,
 	OrderType,
 	FilterType
-} from './Constants.js'
-import Balance from './data/Balance.js'
+} from '../common/Constants.js'
+import Balance from '../dto/Balance.js'
 
 const ORDER_POLLING_INTERVAL_MS = 500;
 
@@ -47,22 +47,25 @@ export default class OrderManager {
 		this._PRECISION = null;
 		this._BASE = null;		// first asset in symbol
 		this._QUOTE = null;		// second asset in symbol
+
+		this.baseBalance = null;
+		this.quoteBalance = null;
 	}
 
 	init(symbols) {
 		for (let i = 0; i < symbols.length; i++) {
-			if (symbols[i].symbol == this.symbol) {
+			if (symbols[i].symbol === this.symbol) {
 				this._BASE = symbols[i].baseAsset;
 				this._QUOTE = symbols[i].quoteAsset;
 				this._PRECISION = Number(symbols[i].baseAssetPrecision);
 				symbols[i].filters.forEach(filter => {
-					if (filter.filterType == FilterType.PRICE_FILTER) {
+					if (filter.filterType === FilterType.PRICE_FILTER) {
 						this._MIN_TICK = Number(filter.tickSize);
 					}
-					else if (filter.filterType == FilterType.LOT_SIZE) {
+					else if (filter.filterType === FilterType.LOT_SIZE) {
 						this._MIN_QTY = Number(filter.minQty);
 					} 
-					else if (filter.filterType == FilterType.MIN_NOTIONAL) {
+					else if (filter.filterType === FilterType.MIN_NOTIONAL) {
 						this._MIN_NOTIONAL = Number(filter.minNotional);
 					}
 				});
@@ -79,9 +82,9 @@ export default class OrderManager {
 
 	setBalances(balances) {
 		balances.forEach(balance => {
-			if (balance.asset == this._BASE) {
+			if (balance.asset === this._BASE) {
 				this.baseBalance = new Balance(balance.asset, balance.free);
-			} else if (balance.asset == this._QUOTE) {
+			} else if (balance.asset === this._QUOTE) {
 				this.quoteBalance = new Balance(balance.asset, balance.free);
 			}
 		});
@@ -131,11 +134,9 @@ export default class OrderManager {
 				symbol: this.symbol,
 				side: 'SELL',
 				type: type,
-				quantity: qty
-			}
-			if (type == OrderType.LIMIT) {
-				order.price = price;
-			}
+				quantity: qty,
+				price: (type === OrderType.LIMIT) ? price : null
+			};
 			let res = await this.client.order(order);
 			this.logger.write(`SELL\t${res.transactTime}\t${res.clientOrderId}\t${res.price}\t${res.origQty}\t${res.executedQty}\n`);
 			this.waitForOrder(Position.SELL, res.clientOrderId);
@@ -160,8 +161,8 @@ export default class OrderManager {
 				side: 'BUY',
 				type: type,
 				quantity: qty
-			}
-			if (type == OrderType.LIMIT) {
+			};
+			if (type === OrderType.LIMIT) {
 				order.price = price;
 			}
 			let res = await this.client.order(order);
@@ -225,14 +226,14 @@ export default class OrderManager {
 			}
 		}, currentPosition, orderId)
 		.then((res) => {
-			if (res.status == OrderStatus.FILLED || (res.status == OrderStatus.CANCELED && this.isPartiallyFilled)) {
+			if (res.status === OrderStatus.FILLED || (res.status === OrderStatus.CANCELED && this.isPartiallyFilled)) {
 				let msg = "";
-				if (res.side == Position.BUY) {					
+				if (res.side === Position.BUY) {
 					msg = `Bought ${res.executedQty} of ${res.symbol} @ ${res.price}`;
 					this.lastBoughtPrice = Number(res.price);
 					this.baseBalance.addQty(res.executedQty);
 					this.quoteBalance.subtractQty(Number(res.executedQty) * Number(res.price));
-				} else if (res.side == Position.SELL) {
+				} else if (res.side === Position.SELL) {
 					msg = `Sold ${res.executedQty} of ${res.symbol} @ ${res.price}`;
 					this.baseBalance.subtractQty(res.executedQty);
 					this.quoteBalance.addQty(Number(res.executedQty) * Number(res.price));
@@ -250,14 +251,14 @@ export default class OrderManager {
 				console.log(msg);
 				this.msgBot.say(msg);
 
-				// Log trade data
-				let action = (res.side == Position.BUY) ? "BOUGHT" : "SOLD";
+				// Log trade dto
+				let action = (res.side === Position.BUY) ? "BOUGHT" : "SOLD";
 				this.logger.write(`${action}\t${res.time}\t${res.clientOrderId}\t${res.price}\t${res.origQty}\t${res.executedQty}\n`);
 
 				// update trade variables
 				let notional = Number(res.executedQty) * Number(res.price);
 
-				if (res.status == OrderStatus.FILLED) {
+				if (res.status === OrderStatus.FILLED) {
 					this.tradeQty = this.tradeParams.TRADE_QTY;
 					this.autoTrader.togglePosition(currentPosition);
 				} else {
@@ -270,7 +271,7 @@ export default class OrderManager {
 					}
 				}
 				this.isPartiallyFilled = false;	// reset this flag after we finish an order
-			} else if (res.status == OrderStatus.CANCELED) {
+			} else if (res.status === OrderStatus.CANCELED) {
 				this.autoTrader.setPosition(currentPosition);
 			}
 		})
@@ -290,8 +291,8 @@ export default class OrderManager {
 					} else {
 						this.getBook().then((book) => {
 							// cancel if order is out of top 2 bids/asks
-							if ((currentPosition == Position.BUY && Number(order.price) < Number(book.bids[1].price)) ||
-								(currentPosition == Position.SELL && Number(order.price) > Number(book.asks[1].price))) 
+							if ((currentPosition === Position.BUY && Number(order.price) < Number(book.bids[1].price)) ||
+								(currentPosition === Position.SELL && Number(order.price) > Number(book.asks[1].price)))
 							{
 								this.cancel(orderId);
 							}

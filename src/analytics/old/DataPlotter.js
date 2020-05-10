@@ -2,13 +2,17 @@
 
 "use strict";
 
-const CONFIG = require("../config.json");
+const CONFIG = require("../../../config.json");
 const plotly = require("plotly")(CONFIG.PLOTLY_USERNAME, CONFIG.PLOTLY_API_KEY);
-const BOLLINGER_BAND_FACTOR = 2;
+const BOLLINGER_BAND_FACTOR = 2.5;
 
 // return date string in format YYYY-MM-DD
 function getDate() {
 	return new Date().toISOString().slice(0,10);
+}
+
+function msToS(ms) {
+	return Math.round(Number(ms) / 1000);
 }
 
 class DataPlotter {
@@ -40,7 +44,7 @@ class DataPlotter {
 		this.setReader(filename);
 		this.lineReader.on("line", line => {
 			let row = line.split("\t");
-			if (row[0] == 'SELL' || row[0] == 'BUY' || row[0] == 'SOLD' || row[0] == 'BOUGHT') {
+			if (row[0] === 'SELL' || row[0] === 'BUY' || row[0] === 'SOLD' || row[0] === 'BOUGHT') {
 				buySellData.append(row[0], row[1], row[3]);
 			} else {
 				askData.append(row[0], row[1], row[3], row[5]);
@@ -74,8 +78,8 @@ class DataPlotter {
 		this.setReader(filename);
 		this.lineReader.on("line", line => {
 			let row = line.split("\t");
-			if (row[0] == 'SELL' || row[0] == 'BUY' || row[0] == 'SOLD' || row[0] == 'BOUGHT') {
-				buySellData.append(row[0], row[1], row[3]);
+			if (row[0] === 'SELL' || row[0] === 'BUY' || row[0] === 'SOLD' || row[0] === 'BOUGHT') {
+				buySellData.append(row[0], msToS(row[1]), row[3]);
 			} else {
 				tradeData.append(row[0], row[1], row[3], row[4]);
 			}
@@ -84,7 +88,11 @@ class DataPlotter {
 			tradeData.getDataTrace("Price"),
 			tradeData.getMaTrace("MA"),
 			tradeData.getFloorTrace("Floor"),
-			tradeData.getCeilTrace("Ceil")
+			tradeData.getCeilTrace("Ceil"),
+			buySellData.getSellTrace(),
+			buySellData.getSoldTrace(),
+			buySellData.getBuyTrace(),
+			buySellData.getBoughtTrace()
 		];
 		this.lineReader.on("close", () => {
 			this.plot(title, plotData);
@@ -134,29 +142,115 @@ class DataPlotter {
 	// timestamp   price   qty
 	processRawTradeData(filename, title, wSize) {
 		let tradeData = new TradeData();
+        let buySellData = new BuySellData();
+        let p0 = 0;
 		let startTimestamp = null;
 		this.setReader(filename);
 		this.lineReader.on("line", line => {
 			let row = line.split("\t");
-			let timestamp = parseInt(row[0]);
-			if (startTimestamp == null) {
-				startTimestamp = timestamp;
-			}
-			tradeData.appendRaw(timestamp, row[1]);
-			if (timestamp - startTimestamp >= wSize) {
-				tradeData.calculateTradeStats(timestamp, wSize);
-				startTimestamp = timestamp - wSize;
+			if (row[0] !== 'SELL' && row[0] !== 'BUY' && row[0] !== 'SOLD' && row[0] !== 'BOUGHT') {
+				let timestamp = parseInt(row[0]);
+				if (startTimestamp == null) {
+					startTimestamp = timestamp;
+					p0 = Number(row[1]);
+				}
+                // tradeData.append(row[0], row[1], row[3], row[4]);
+				tradeData.appendRaw(timestamp, row[1]);
+				if (timestamp - startTimestamp >= wSize) {
+					tradeData.calculateTradeStats(timestamp, wSize);
+					startTimestamp = timestamp - wSize;
+				}
+				// if (timestamp - startTimestamp >= wSize) {
+				// 	buySellData.append('BOUGHT', timestamp, row[1]);
+				// 	let vel = Number(row[1]) - p0;
+				// 	if (position === 'BUY' && vel >= 0) {
+				// 		buySellData.append(position, timestamp, row[1]);
+				// 		position = 'SELL';
+				// 	} else if (position === 'SELL' && vel <= 0) {
+				// 		buySellData.append(position, timestamp, row[1]);
+				// 		position = 'BUY';
+				// 	}
+				// 	startTimestamp = timestamp;
+				// 	p0 = Number(row[1]);
+				// }
 			}
 		});
 		let plotData = [
 			tradeData.getDataTrace("Price"),
 			tradeData.getMaTrace("MA"),
 			tradeData.getFloorTrace("Floor"),
-			tradeData.getCeilTrace("Ceil")
+			tradeData.getCeilTrace("Ceil"),
+			// tradeData.getTradeTrace(),
+			// tradeData.getVelTrace()
+            // buySellData.getBuyTrace(),
+			// buySellData.getSellTrace(),
+			// buySellData.getBoughtTrace()
 		];
 		this.lineReader.on("close", () => {
 			this.plot(title, plotData);
 		});
+	}
+
+    // raw_data colunmns:
+    // timestamp   price   qty
+    processVelocity(filename, title, wSize) {
+        let tradeData = new TradeData();
+        let buySellData = new BuySellData();
+        let velocityData = new VelocityData();
+        let p0 = 0;
+        let startTimestamp = null;
+        this.setReader(filename);
+        this.lineReader.on("line", line => {
+            let row = line.split("\t");
+            if (row[0] !== 'SELL' && row[0] !== 'BUY' && row[0] !== 'SOLD' && row[0] !== 'BOUGHT') {
+                let timestamp = parseInt(row[0]);
+                if (startTimestamp == null) {
+                    startTimestamp = timestamp;
+                    p0 = Number(row[3]);
+                }
+                tradeData.append(row[0], row[1], row[3], row[4]);
+                if (timestamp - startTimestamp >= wSize) {
+                	let v = (Number(row[3]) - p0) / wSize;
+                	velocityData.append(v + 850, timestamp);
+                	p0 = Number(row[3]);
+                	startTimestamp = timestamp;
+                }
+            }
+        });
+        let plotData = [
+            tradeData.getDataTrace("Price"),
+            tradeData.getMaTrace("MA"),
+            tradeData.getFloorTrace("Floor"),
+            tradeData.getCeilTrace("Ceil"),
+			velocityData.getVelTrace()
+            // buySellData.getBuyTrace(),
+            // buySellData.getSellTrace(),
+            // buySellData.getBoughtTrace()
+        ];
+        this.lineReader.on("close", () => {
+            this.plot(title, plotData);
+        });
+    }
+}
+
+class VelocityData {
+	constructor() {
+		this.velocity = [];
+		this.time = [];
+	}
+
+	append(vel, time) {
+		this.velocity.push(vel);
+		this.time.push(time);
+    }
+
+    getVelTrace() {
+        return {
+            x: this.time,
+            y: this.velocity,
+            name: "Velocity",
+            type: "scatter"
+        };
 	}
 }
 
@@ -170,7 +264,7 @@ class TickerData {
 		this.ceil = [];
 		this.statTime = [];
 
-		// used for plotting raw stats data
+		// used for plotting raw stats dto
 		this.prevMa = null;
 	}
 
@@ -184,10 +278,10 @@ class TickerData {
 
 		// EMA
 		// if (this.prevMa == null) {
-		// 	this.prevMa = calcAvg(this.data.slice(0, wSize));
+		// 	this.prevMa = calcAvg(this.dto.slice(0, wSize));
 		// 	this.ma.push(this.prevMa);
 		// } else {
-		// 	let ema = calcEma(this.data[pos-1], this.prevMa, wSize);
+		// 	let ema = calcEma(this.dto[pos-1], this.prevMa, wSize);
 		// 	this.ma.push(ema);
 		// 	this.prevMa = ema;
 		// }
@@ -199,7 +293,7 @@ class TickerData {
 		// Standard Deviation
 		let std = calcStd(this.data.slice(pos-wSize, pos));
 		let ceil = this.prevMa + std*BOLLINGER_BAND_FACTOR;
-		let floor = this.prevMa - std*BOLLINGER_BAND_FACTOR
+		let floor = this.prevMa - std*BOLLINGER_BAND_FACTOR;
 		this.std.push(std);
 		this.ceil.push(ceil);
 		this.floor.push(floor);
@@ -264,6 +358,15 @@ class TradeData {
 		this.floor = [];
 		this.ceil = [];
 		this.statTime = [];
+
+		this.vel = [];
+		this.vTime = [];
+		this.m0 = 0;
+		this.v0 = 0;
+		this.vStartTime = null;
+
+		this.trade = [];
+		this.tradeTime = [];
 	}
 
 	append(timestamp, price, ma, std) {
@@ -305,7 +408,52 @@ class TradeData {
 		this.std.push(std);
 		this.floor.push(u - BOLLINGER_BAND_FACTOR*std);
 		this.ceil.push(u + BOLLINGER_BAND_FACTOR*std);
+
+		if (this.vStartTime == null) {
+			this.vStartTime = timestamp;
+			this.m0 = u;
+		}
+
+		if (timestamp - this.vStartTime >= 60) {
+			let v = (u - this.m0)/60;
+			this.vel.push(v);
+			this.vTime.push(timestamp);
+			if (v * this.v0 <= 0) {
+				this.trade.push(u);
+				this.tradeTime.push(timestamp);
+			}
+			this.v0 = v;
+			this.m0 = u;
+			this.vStartTime = timestamp;
+		}
 	}
+
+    getTradeTrace() {
+        return {
+            x: this.tradeTime,
+            y: this.trade,
+            name: "Trade",
+            type: "scatter",
+            mode: "markers",
+            marker: {
+                size: 12,
+                line: {
+                    color: "white",
+                    width: 0.5
+                }
+            }
+        }
+    }
+
+	getVelTrace() {
+        return {
+            x: this.vTime,
+            y: this.vel,
+            name: "Velocity",
+            type: "scatter"
+        };
+	}
+
 
 	getDataTrace(name) {
 		return {
@@ -358,16 +506,16 @@ class BuySellData {
 	}
 
 	append(orderType, timestamp, price) {
-		if (orderType == 'SELL') {
+		if (orderType === 'SELL') {
 			this.sellData.push(Number(price));
 			this.sellTime.push(Number(timestamp));
-		} else if (orderType == 'BUY') {
+		} else if (orderType === 'BUY') {
 			this.buyData.push(Number(price));
 			this.buyTime.push(Number(timestamp));
-		} else if (orderType == 'SOLD') {
+		} else if (orderType === 'SOLD') {
 			this.soldData.push(Number(price));
 			this.soldTime.push(Number(timestamp));
-		} else if (orderType == 'BOUGHT') {
+		} else if (orderType === 'BOUGHT') {
 			this.boughtData.push(Number(price));
 			this.boughtTime.push(Number(timestamp));
 		}
@@ -384,10 +532,10 @@ class BuySellData {
 		let spread = ceil - floor;
 		let p90 = floor + 0.9*spread;
 		let p10 = floor + 0.1*spread;
-		if (orderType == 'SELL' && price > p90) {
+		if (orderType === 'SELL' && price > p90) {
 			this.sellData.push(price);
 			this.sellTime.push(time);
-		} else if (orderType == 'BUY' && price < p10) {
+		} else if (orderType === 'BUY' && price < p10) {
 			this.buyData.push(price);
 			this.buyTime.push(time);
 		}		
@@ -523,6 +671,7 @@ function calcStd(data) {
 
 const dp = new DataPlotter();
 // dp.processTickerData('./logs/2018-02-12/BNBUSDT_stats.txt', 'BNBUSDT - ticker');
-// dp.processRawTradeData('./logs/2018-02-19/ETHUSDT_trade_stats.txt', 'ETHUSDT - trade raw', 1200);
-dp.processTradeData('./logs/2018-02-25/ETHUSDT_trade_stats.txt', 'ETHUSDT - trade');
+dp.processRawTradeData('./logs/2018-03-01/ETHUSDT_trade_stats.txt', 'ETHUSDT - trade raw', 1200);
+// dp.processVelocity('./logs/2018-03-01/ETHUSDT_trade_stats.txt', 'ETHUSDT - velocity', 120);
+// dp.processTradeData('./logs/2018-03-01/ETHUSDT_trade_stats.txt', 'ETHUSDT - trade');
 

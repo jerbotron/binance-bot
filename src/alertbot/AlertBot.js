@@ -2,7 +2,7 @@
 
 import BootBot from 'bootbot';
 
-const CONFIG = require("../config.json");
+const CONFIG = require("../../config.json");
 
 export default class AlertBot {
 
@@ -19,7 +19,7 @@ export default class AlertBot {
 			if (!this.chat) {
 				this.chat = chat;
 				chat.say("Hi, welcome to Jerbotron! Enter 'start' to begin receiving alerts.");
-			};
+			}
 		});
 
 		this.bot.hear('start', (payload, chat) => {

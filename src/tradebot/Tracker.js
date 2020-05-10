@@ -7,8 +7,8 @@ import {
 	msToS,
 	msToMin,
 	getDate
-} from './Utils.js';
-import TickerData from './data/TickerData.js'
+} from '../common/Utils.js';
+import TickerData from '../dto/TickerData.js'
 
 export default class Tracker {
 

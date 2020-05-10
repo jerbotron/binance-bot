@@ -2,4 +2,4 @@
 
 1) npm install
 2) npm run build
-3) node dist/app.js
+3) node dist/main.js

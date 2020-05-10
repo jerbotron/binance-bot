@@ -2,10 +2,10 @@
 
 "use strict";
 
-import express from 'express';
-import bodyParser from 'body-parser';
+const express = require('express');
+const bodyParser = require('body-parser');
 
-const CONFIG = require("../config.json");
+const CONFIG = require("../../config.json");
 const app = express().use(bodyParser.json());
 
 // Creates the endpoint for our webhook 
@@ -60,4 +60,4 @@ app.get('/webhook', (req, res) => {
 	}
 });
 
-export { app }
+module.exports = app;

@@ -2,7 +2,7 @@
 
 "use strict";
 
-import { BOLLINGER_BAND_FACTOR } from '../Constants.js'
+import { BOLLINGER_BAND_FACTOR } from '../common/Constants.js'
 
 export default class TradeData {
 

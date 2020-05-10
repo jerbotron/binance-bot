@@ -31,7 +31,7 @@ function round(n, precision) {
 function increaseLowestDigit(n, symbol) {
 	let d = 1;
 	for (let i = n.length-1; i >= 0; i--) {
-		if (n.charAt(i) == '.') {
+		if (n.charAt(i) === '.') {
 			d = n.length - 1 - i;
 			break;
 		}
@@ -43,7 +43,7 @@ function increaseLowestDigit(n, symbol) {
 function decreaseLowestDigit(n, symbol) {
 	let d = 1;
 	for (let i = n.length-1; i >= 0; i--) {
-		if (n.charAt(i) == '.') {
+		if (n.charAt(i) === '.') {
 			d = n.length - 1 - i
 			break;
 		}
@@ -51,11 +51,16 @@ function decreaseLowestDigit(n, symbol) {
 	return (Number(n) - 1/Math.pow(10, d)).toFixed(8);
 }
 
-export { 
+const formatDate = date => {
+	return date.toISOString().split('.')[0].replace('T', ' ')
+};
+
+module.exports = {
 	isBaseEth, 
 	msToS, 
 	msToMin, 
 	getDate,
 	getPercentGain,
-	round
-}
+	round,
+	formatDate
+};
