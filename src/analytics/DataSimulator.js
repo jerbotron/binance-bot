@@ -408,5 +408,5 @@ const ds = new DataSimulator("data/BTCUSDT-1m-data.csv");
 
 // ds.trainModel(modelConfig, "2020-05-11");
 // ds.trainModel(modelConfig, "2020-05-01", "2020-05-02");
-// ds.simulateTradeStrategy(tradeConfig, "2020-05-11", null, true);
+ds.simulateTradeStrategy(tradeConfig, "2020-05-11", null, true);
 // ds.simulateTradeStrategy(2, 1.5, 65, 15, "2020-05-01");

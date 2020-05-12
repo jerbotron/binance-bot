@@ -96,20 +96,18 @@ class TradeSnapshot {
             console.log("Error: invalid candle format, " + candle.eventType);
         }
 
-        decisionHandler(new TradeDecision(this.timestamp, Position.BUY, this.tradeConfig.symbol, close));
-
         // evaluate trade decision
-        // if (pos === Position.BUY && close < this.floor && this.vel < 0 && this.acc > 0) {
-        //     this.prevBuy = close;
-        //     decisionHandler(new TradeDecision(this.timestamp, Position.BUY, this.tradeConfig.symbol, close));
-        // } else if (pos === Position.SELL && this.prevBuy) {
-        //     let gain = close - this.prevBuy;
-        //     let lossThreshold = 1 - (close / this.prevBuy);
-        //     if ((close > this.ceiling && this.vel > 0 && this.acc < 0 && gain >= 0) ||
-        //         lossThreshold >= this.tradeConfig.stopLimit) {
-        //         decisionHandler(new TradeDecision(this.timestamp, Position.SELL, this.tradeConfig.symbol, close));
-        //     }
-        // }
+        if (pos === Position.BUY && close < this.floor && this.vel < 0 && this.acc > 0) {
+            this.prevBuy = close;
+            decisionHandler(new TradeDecision(this.timestamp, Position.BUY, this.tradeConfig.symbol, close));
+        } else if (pos === Position.SELL && this.prevBuy) {
+            let gain = close - this.prevBuy;
+            let lossThreshold = 1 - (close / this.prevBuy);
+            if ((close > this.ceiling && this.vel > 0 && this.acc < 0 && gain >= 0) ||
+                lossThreshold >= this.tradeConfig.stopLimit) {
+                decisionHandler(new TradeDecision(this.timestamp, Position.SELL, this.tradeConfig.symbol, close));
+            }
+        }
     }
 
     updateVelAndAcc(timestamp,
