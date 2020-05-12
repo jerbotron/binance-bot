@@ -2,214 +2,98 @@
 
 "use strict";
 
-import Rx from 'rxjs/Rx'
-import {
+const Rx = require('rxjs/Rx');
+const {
+    TradeDecision
+} = require("../dto/Trade");
+const OrderBook = require("../dto/OrderBook");
+const {
     Position,
     OrderType
-} from '../common/Constants.js'
-import OrderManager from './OrderManager.js'
+} = require('../common/Constants');
 
-export default class AutoTrader {
-
-    constructor(client, dataEngine, tracker, msgBot, tradeParams) {
+/*
+    AutoTrader subscribes to trade decision signals from DataEngine and executes trades and emits signals when the order
+    is complete.
+ */
+class AutoTrader {
+    constructor(client, symbol, dataEngine, eventLogger) {
         this.client = client;
-        this.dataEngine = dataEngine;
-        this.tracker = tracker;
-        this.msgBot = msgBot;
-        this.symbol = tradeParams.SYMBOL;
-        this.tradeParams = tradeParams;
-        this.orderManager = new OrderManager(this, client, msgBot, tradeParams);
+        this.symbol = symbol;
+        this.logger = eventLogger;
+        this.msgBot = null;
+        this.orderSubject = new Rx.Subject();
 
-        this.prevPrice = null;
+        // Configure subscription streams
+        this.tradeSubscription = dataEngine.onTradeDecision()
+            .subscribeOn(Rx.Scheduler.asap)
+            .observeOn(Rx.Scheduler.queue)
+            .subscribe(this.subscribeTradeDecision());
 
-        this.init();
-    }
+        this.orderSubscription = this.orderSubject
+            .subscribeOn(Rx.Scheduler.asap)
+            .observeOn(Rx.Scheduler.queue)
+            .subscribe(dataEngine.subscribeOrderStatus());
 
-    init() {
+        // Init account info
         this.getExchangeInfo().then(res => {
-            this.initTradeInfo(res.symbols);
-            this.getAccountInfo().then(res => {
-                this.initAccountInfo(res.balances);
-                this.position = this.tradeParams.INITIAL_POSITION;
-            });
+            this.orderBook = new OrderBook(client, symbol, res, eventLogger);
         });
     }
 
-    initTradeInfo(symbols) {
-        this.orderManager.init(symbols);
-    }
-
-    initAccountInfo(balances) {
-        this.orderManager.setBalances(balances);
-    }
-
-    start() {
-        this.subscribeTrade();
-        // this.subscribeTicker();
-        // this.tracker.trackTicker(this.symbol);
-        this.tracker.trackTrades([this.symbol]);
-    }
-
     stop() {
-        this.tracker.stop();
-        this.unsubscribeTrade();
-        this.unsubscribeTicker();
-    }
-
-    setPosition(position) {
-        this.position = position;
-    }
-
-    togglePosition(currentPosition) {
-        this.position = (currentPosition === Position.BUY) ? Position.SELL : Position.BUY;
-    }
-
-    subscribeTrade() {
-        this.tradeSubscription = this.dataEngine.alertPriceChange()
-            .subscribeOn(Rx.Scheduler.asap)
-            .observeOn(Rx.Scheduler.queue)
-            .subscribe(this.autoTrade());
-    }
-
-    subscribeTicker() {
-        this.tickerSubscription = this.dataEngine.alertTickerChange()
-            .subscribeOn(Rx.Scheduler.asap)
-            .observeOn(Rx.Scheduler.queue)
-            .subscribe(this.updateTickers());
-    }
-
-    unsubscribeTrade() {
+        this.logger.logInfo("shutting down AutoTrader");
+        this.orderBook.stop();
         if (this.tradeSubscription) this.tradeSubscription.unsubscribe();
+        if (this.orderSubscription) this.orderSubscription.unsubscribe();
     }
 
-    unsubscribeTicker() {
-        if (this.tickerSubscription) this.tickerSubscription.unsubscribe();
-    }
-
-    updateTickers() {
+    subscribeTradeDecision() {
         return Rx.Subscriber.create(
-            // x = TickerData object
-            x => {
-                this.orderManager.updateTickers(x);
+            tradeDecision => {
+                this.sendOrder(tradeDecision);
             },
             e => {
-                console.log(`onError: ${e}`);
-                this.msgBot.say(`onError: ${e}`);
+                this.logger.logError("onTradeDecision() error, " + e);
             },
             () => {
-                console.log('onCompleted');
-            }
+                this.logger.logInfo("auto trade subscription stream closed");
+            },
         );
     }
 
-    autoTrade() {
-        return Rx.Subscriber.create(
-            // x = TradeData object
-            x => {
-                switch (this.position) {
-                    case Position.BUY: {
-                        if (this.shouldBuy_3(x)) {
-                            this.orderManager.executeBuy(x.price);
-                        }
-                        this.prevPrice = x.price;
-                        break;
-                    }
-                    case Position.SELL: {
-                        if (this.shouldSell_3(x)) {
-                            this.orderManager.executeSell(x.price);
-                        }
-                        this.prevPrice = x.price;
-                        break;
-                    }
-                    case Position.PENDING:
-                    default:
-                        return;
+    sendOrder(decision, type = OrderType.MARKET) {
+        let order = {
+            symbol: decision.symbol,
+            side: decision.pos,
+            type: type,
+            quantity: this.orderBook.getTradeQty(decision.pos, decision.price)
+            //price: decision.price (price not required from market orders
+        };
+        try {
+            this.client.order(order).then(res => {
+                if (res.status === "FILLED") {
+                    this.orderSubject.next(res);
+                    this.logger.logOrder(res);
+                } else {
+                    this.logger.logError("order was not fully filled, id = " + res.orderId);
                 }
-            },
-            e => {
-                console.log(`onError: ${e}`);
-                this.msgBot.say(`onError: ${e}`);
-            },
-            () => {
-                console.log('onCompleted');
-            }
-        );
-    }
-
-    shouldBuy_1(x) {
-        console.log(`${x.timestamp}\t${this.position}\t${x.price}\t${x.floor}\t${x.ma}`);
-        return x.price >= this.prevPrice &&
-            x.price > x.floor &&
-            x.price < x.ma;
-    }
-
-    shouldBuy_2(x) {
-        console.log(`${x.timestamp}\t${this.position}\t${x.price}\t${x.floor}\t${x.ma - x.std}`);
-        return x.price > x.floor &&
-            x.price < (x.ma - x.std);
-    }
-
-    shouldBuy_3(x) {
-        console.log(`${x.timestamp}\t${this.position}\t${x.price}\t${x.getP10()}`);
-        return x.price <= x.getP10() &&
-            x.price >= this.prevPrice;
-    }
-
-    shouldSell_1(x) {
-        let percentGain = this.orderManager.getPercentGain(x.price);
-        console.log(`${x.timestamp}\t${this.position}\t${x.price}\t${x.ma}\t${percentGain}`);
-        return x.price <= this.prevPrice &&
-            (percentGain == null || percentGain >= this.tradeParams.MIN_PERCENT_GAIN) &&
-            x.price > x.ma;
-    }
-
-    shouldSell_2(x) {
-        let percentGain = this.orderManager.getPercentGain(x.price);
-        console.log(`${x.timestamp}\t${this.position}\t${x.price}\t${x.ma + x.std}\t${percentGain}`);
-        return (percentGain == null || percentGain >= this.tradeParams.MIN_PERCENT_GAIN) &&
-            x.price > x.ma + x.std;
-    }
-
-    shouldSell_3(x) {
-        let percentGain = this.orderManager.getPercentGain(x.price);
-        console.log(`${x.timestamp}\t${this.position}\t${x.price}\t${x.getP90()}\t${percentGain}`);
-        return x.price >= x.getP90() &&
-            x.price <= this.prevPrice &&
-            (percentGain == null || percentGain >= this.tradeParams.MIN_PERCENT_GAIN);
+                this.orderBook.updateBalances().then();
+            });
+        } catch (e) {
+            this.logger.logError("error occurred in sendOrder(), " + e);
+            this.orderSubject.error(e);
+        }
     }
 
     async getExchangeInfo() {
         try {
             return await this.client.exchangeInfo();
         } catch (e) {
-            console.log(e);
-            this.msgBot.say("Errored in getExchangeInfo()");
-        }
-    }
-
-    async getAccountInfo() {
-        try {
-            return await this.client.accountInfo();
-        } catch (e) {
-            console.log(e);
-            this.msgBot.say("Errored in getAccountInfo()");
-        }
-    }
-
-    async orderTest(price, qty, type = OrderType.LIMIT) {
-        try {
-            let order = {
-                symbol: this.symbol,
-                side: 'SELL',
-                type: type,
-                quantity: qty
-            };
-            if (type === OrderType.LIMIT) {
-                order.price = price;
-            }
-            return await this.client.orderTest(order);
-        } catch (e) {
-            console.log(e);
+            // this.msgBot.say("Errored in getExchangeInfo()");
+            this.logger.logError("failed to get exchange info, " + e);
         }
     }
 }
+
+module.exports = AutoTrader;

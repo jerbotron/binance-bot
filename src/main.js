@@ -3,11 +3,19 @@
 "use strict";
 
 const Binance = require('binance-api-node').default;
-const app = require('./alertbot/Webhook');
+var figlet = require('figlet');
 
+const app = require('./alertbot/Webhook');
 const DataEngine = require('./tradebot/DataEngine');
-const CONFIG = require("../config.json");
-const dto = require('./dto/Trade.js');
+const AutoTrader = require('./tradebot/AutoTrader');
+const EventLogger = require('./tradebot/EventLogger');
+const CONFIG = require("./../config.json");
+const {
+    TradeConfig
+} = require('./dto/Trade.js');
+const {
+    Position
+} = require('./common/Constants');
 
 const client = Binance(
     {
@@ -16,25 +24,34 @@ const client = Binance(
     }
 );
 
-/**************************************/
-/** EDIT PARAMS BELOW BEFORE TRADING **/
-/**************************************/
-const tradeConfig = new dto.TradeConfig(
-    "BTCUSDT",
-    1.25,
-    9.5,
-    5,
-    2,
-    0.15);
-console.log(tradeConfig);
+function main() {
+    console.log(figlet.textSync('spark bot.', '3D-ASCII'));
 
-// Initialize App Components
-const dataEngine = new DataEngine(client, tradeConfig);
+    const tradeConfig = new TradeConfig(
+        "BTCUSDT",
+        2,
+        4,
+        80,
+        3,
+        0.01,
+        Position.BUY);
+    tradeConfig.log();
 
-// Start App
-app.listen(8080, () => console.log('Jerbotron webhook listening on port 8080...'));
-dataEngine.start();
+    // Initialize App Components
+    const eventLogger = new EventLogger(tradeConfig.symbol);
+    const dataEngine = new DataEngine(client, tradeConfig, eventLogger);
+    const autoTrader = new AutoTrader(client, tradeConfig.symbol, dataEngine, eventLogger);
 
-process.on("SIGINT", () => {
-    process.exit(0);
-});
+    // Start App
+    app.listen(8080, () => console.log('Jerbotron webhook listening on port 8080...'));
+    dataEngine.start();
+
+    process.on("SIGINT", () => {
+        dataEngine.stop();
+        autoTrader.stop();
+        eventLogger.stop();
+        process.exit(0);
+    });
+}
+
+main();

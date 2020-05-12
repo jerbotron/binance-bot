@@ -13,25 +13,33 @@ class TradeConfig {
         symbol,
         bbFactor,
         smoothingConst,
-        bbWSize,
+        wSize,
         vWSize,
-        stopThreshold,
-        position = Position.BUY,
+        stopLimit,
+        position,
         isSimulation = true
     ) {
-        this.Symbol = symbol;
-        this.BBFactor = bbFactor;
-        this.S = smoothingConst;
-        this.WSize = bbWSize;
-        this.VWSize = vWSize;
-        this.StopThreshold = stopThreshold;
+        this.symbol = symbol;
+        this.bb = bbFactor;
+        this.s = smoothingConst;
+        this.wSize = wSize;
+        this.vwSize = vWSize;
+        this.stopLimit = stopLimit;
+        this.position = position;
+        this.isSimulation = isSimulation;
+    }
+
+    log() {
+        console.log("TradeConfig: ");
+        console.log(`* BB: ${this.symbol}\n* S: ${this.s}\n* wSize: ${this.wSize}\n* vwSize: ${this.vwSize}\n* sT: ${this.stopLimit.toFixed(2)}\n* position: ${this.position}\n* isSimulation: ${this.isSimulation}`);
     }
 }
 
 class TradeDecision {
-    constructor(timestamp, pos, price) {
+    constructor(timestamp, pos, symbol, price) {
         this.timestamp = timestamp;
         this.pos = pos;
+        this.symbol = symbol;
         this.price = price;
     }
 }
@@ -51,7 +59,7 @@ class TradeSnapshot {
         }
     ) {
         this.tradeConfig = tradeConfig;
-        this.window = new SlidingWindow(tradeConfig.WSize);
+        this.window = new SlidingWindow(tradeConfig.wSize);
         this.vel = 0;
         this.acc = 0;
         for (let i = 0; i < snapshotData.length; i++) {
@@ -74,32 +82,34 @@ class TradeSnapshot {
     ) {
         let close = Number(candle.close);
         this.window.push(close);
-        let s = this.tradeConfig.S / (1.0 + this.tradeConfig.WSize);
+        let s = this.tradeConfig.s / (1.0 + this.tradeConfig.wSize);
         this.ema = close * s + this.ema * (1 - s);
         let std = this.window.getStd();
-        this.floor = this.ema - this.tradeConfig.BBFactor * std;
-        this.ceiling = this.ema + this.tradeConfig.BBFactor * std;
+        this.floor = this.ema - this.tradeConfig.bb * std;
+        this.ceiling = this.ema + this.tradeConfig.bb * std;
         this.updateVelAndAcc(candle.eventTime, close, velAccHandler);
         if (candle.eventType === "kline") {
             this.timestamp = new Date(candle.eventTime);
         } else if (candle.eventType === "log") {
             this.timestamp = candle.eventTime;
         } else {
-            console.log("Error: invalid candle format, " + candle);
+            console.log("Error: invalid candle format, " + candle.eventType);
         }
 
+        decisionHandler(new TradeDecision(this.timestamp, Position.BUY, this.tradeConfig.symbol, close));
+
         // evaluate trade decision
-        if (pos === Position.BUY && close < this.floor && this.vel < 0 && this.acc > 0) {
-            this.prevBuy = close;
-            decisionHandler(new TradeDecision(this.timestamp, Position.BUY, close));
-        } else if (pos === Position.SELL && this.prevBuy) {
-            let gain = close - this.prevBuy;
-            let lossThreshold = 1 - (close / this.prevBuy);
-            if ((close > this.ceiling && this.vel > 0 && this.acc < 0 && gain >= 0) ||
-                lossThreshold >= this.tradeConfig.StopThreshold) {
-                decisionHandler(new TradeDecision(this.timestamp, Position.SELL, close));
-            }
-        }
+        // if (pos === Position.BUY && close < this.floor && this.vel < 0 && this.acc > 0) {
+        //     this.prevBuy = close;
+        //     decisionHandler(new TradeDecision(this.timestamp, Position.BUY, this.tradeConfig.symbol, close));
+        // } else if (pos === Position.SELL && this.prevBuy) {
+        //     let gain = close - this.prevBuy;
+        //     let lossThreshold = 1 - (close / this.prevBuy);
+        //     if ((close > this.ceiling && this.vel > 0 && this.acc < 0 && gain >= 0) ||
+        //         lossThreshold >= this.tradeConfig.stopLimit) {
+        //         decisionHandler(new TradeDecision(this.timestamp, Position.SELL, this.tradeConfig.symbol, close));
+        //     }
+        // }
     }
 
     updateVelAndAcc(timestamp,
@@ -107,9 +117,9 @@ class TradeSnapshot {
                     handler = () => {
                     }
     ) {
-        if (this.window.isAtMultipleOf(this.tradeConfig.VWSize)) {
+        if (this.window.isAtMultipleOf(this.tradeConfig.vwSize)) {
             let prevVel = this.vel;
-            this.vel = price - this.window.lastN(this.tradeConfig.VWSize);
+            this.vel = price - this.window.lastN(this.tradeConfig.vwSize);
             this.acc = this.vel - prevVel;
             handler(timestamp, this.vel, this.acc);
         }

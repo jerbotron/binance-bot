@@ -11,9 +11,9 @@ const {
 const {
     TradeConfig,
     TradeSnapshot,
-    TradeDecision,
 } = require("../dto/Trade.js");
 const Candle = require("../dto/Candle.js");
+const { Worker, isMainThread, parentPort } = require('worker_threads');
 
 //timestamp,open,high,low,close,volume,close_time,quote_av,trades,tb_base_av,tb_quote_av,ignore
 
@@ -38,15 +38,24 @@ class DataSimulator {
 
         this.processData(this.filename, startDate, endDate, () => {
             let result = this.runSimulation(tradeConfig);
+            let writer = fs.createWriteStream(`simulation/${startDate}_${endDate}.csv`, {flags: "w"});
+            writer.write("timestamp,order,price,gain\n");
+            for (let i = 0; i < result.buys.x.length; i++) {
+                let buy = Number(result.buys.y[i]);
+                let sell = Number(result.sells.y[i]);
+                writer.write([result.buys.x[i], Position.BUY, result.buys.y[i]].join(',') + "\n");
+                writer.write([result.sells.x[i], Position.SELL, result.sells.y[i], sell - buy].join(',') + "\n");
+            }
             if (plot) {
                 this.plot2YAxis("btc", result.plotData);
             }
+            writer.end();
             console.log(`Done simulation, net gain = ${result.netGain}`);
         });
     }
 
     // startDate/endDate in YYYY-MM-DD format
-    trainModel(tradeConfig, startDate, endDate = null) {
+    trainModel(modelConfig, startDate, endDate = null) {
         if (!endDate) {
             endDate = new Date(Date.now());
             endDate.setDate(endDate.getDate() + 1);
@@ -55,38 +64,72 @@ class DataSimulator {
         startDate = new Date(startDate);
         startDate = startDate.toISOString().split('T')[0];
         console.log(`Training model for dataset from ${startDate} to ${endDate}`);
-        console.log(tradeConfig);
+        console.log(modelConfig);
 
-        let formatResult = (bb, s, wSize, vwSize, sT, result, max) => {
-            console.log(`BB: ${bb}\ts: ${s}\twSize: ${wSize}\tvwSize: ${vwSize}\tsT: ${sT.toFixed(2)}\tn: ${result.trades}\tgain: ${result.netGain.toFixed(2)}\tmax: ${max.toFixed(2)}`)
+        let logResults = (bb, s, wSize, vwSize, sT, result) => {
+            console.log(`BB: ${bb}\ts: ${s}\twSize: ${wSize}\tvwSize: ${vwSize}\tsT: ${sT.toFixed(2)}\tn: ${result.sells.length}\tgain: ${result.netGain.toFixed(2)}\t`)
         };
 
-        this.processData(this.filename, startDate, endDate, () => {
+        this.processData(this.filename, startDate, endDate, async () => {
             let writer = fs.createWriteStream(`model/${startDate}_${endDate}.csv`, {flags: "w"});
             writer.write("bb,s,wSize,v_wSize,stop_threshold,trades,netgain\n");
+            let startTime = new Date();
             let maxGain = 0;
-            for (let i = 1; i <= tradeConfig.BBFactor; i += 0.5) {
-                for (let j = 1; j <= tradeConfig.S; j += 0.5) {
-                    for (let k = 15; k <= tradeConfig.WSize; k += 5) {
-                        for (let l = 1; l <= k; l += 1) {
-                            for (let m = 0; m < tradeConfig.StopThreshold; m += 0.05) {
-                                let result = this.runSimulation(new TradeConfig(tradeConfig.Symbol, i, j, k, l, m));
-                                if (result.netGain > 1000) {
-                                    let row = [i, j, k, l, m, result.trades, result.netGain];
-                                    writer.write(row.join(",") + "\n");
-                                    formatResult(i, j, k, l, m, result, maxGain);
-                                    if (result.netGain > maxGain) {
-                                        maxGain = result.netGain;
-                                    }
-                                }
-                            }
+            let modelWorkers = this.generateModelWorkers(modelConfig, 10);
+
+            let modelOutput = await Promise.all(modelWorkers);
+            modelOutput.forEach(output => {
+                output.forEach(out => {
+                    let result = out[1];
+                    if (result.netGain > 0) {
+                        let config = out[0];
+                        writer.write([config.bb, config.s, config.wSize, config.vwSize,
+                            config.stopLimit, result.sells.length, result.netGain].join(',') + "\n");
+                        if (result.netGain > maxGain) {
+                            maxGain = result.netGain;
+                            logResults(config.bb, config.s, config.wSize, config.vwSize, config.stopLimit, result);
+                        }
+                    }
+                });
+            });
+
+            writer.end();
+            console.log(`Done training model in ${(Date.now() - startTime.getTime()) / 1000}s, maxGain = ${maxGain}`);
+        });
+    }
+
+    generateModelWorkers(modelConfig, poolSize) {
+        let newWorkers = async (n, tradeConfigs) => {
+            return new Promise(resolve => {
+                let workerOutput = [];
+                tradeConfigs.forEach(config => {
+                    let result = this.runSimulation(tradeConfig);
+                    workerOutput.push([config, result]);
+                });
+                resolve(workerOutput);
+            });
+        };
+
+        let work = [];
+        for (let bb = 1; bb <= modelConfig.bb; bb += 0.5) {
+            for (let s = 1; s <= modelConfig.s; s += 0.5) {
+                for (let wSize = 15; wSize <= modelConfig.wSize; wSize += 5) {
+                    for (let vSize = 1; vSize <= modelConfig.vwSize; vSize += 2) {
+                        for (let stop = 0; stop <= modelConfig.stopLimit; stop += 0.01) {
+                            work.push(new TradeConfig(modelConfig.symbol, bb, s, wSize, vSize, stop));
                         }
                     }
                 }
             }
-            writer.end();
-            console.log("Done training model, maxGain = ", maxGain);
-        });
+        }
+
+        let perWorker = work.length / poolSize;
+        let workers = new Array(poolSize);
+        for (let i = 0; i < poolSize; i++) {
+            workers[i] = newWorkers(i, work.slice(i * perWorker, (i + 1) * perWorker));
+        }
+
+        return workers;
     }
 
     processData(filename, startDate, endDate, done = null) {
@@ -104,12 +147,11 @@ class DataSimulator {
                 this.data.push(line.split(","));
             }
         });
-        reader.on("close", () => {
+        reader.on("close", async () => {
             if (done) {
                 done();
             } else {
-
-                ("done reading data, no callback found...");
+                console.log("done reading data, no callback found...");
             }
         });
     }
@@ -145,8 +187,7 @@ class DataSimulator {
         let pos = Position.BUY;
 
         // Define event handlers
-        let decisionHandler = decision => {
-            // console.log(`${decision.timestamp}\t${decision.pos}\t\t${decision.price}\n`);
+        let decisionHandler = (decision) => {
             if (decision.pos === Position.BUY) {
                 buys.x.push(decision.timestamp);
                 buys.y.push(decision.price);
@@ -169,8 +210,8 @@ class DataSimulator {
         };
 
         // Create trade snapshot and begin simulation
-        let snapshot = new TradeSnapshot(tradeConfig, this.data.slice(0, tradeConfig.WSize), false, velAccHandler);
-        for (let i = tradeConfig.WSize; i < this.data.length; i++) {
+        let snapshot = new TradeSnapshot(tradeConfig, this.data.slice(0, tradeConfig.wSize), false, velAccHandler);
+        for (let i = tradeConfig.wSize; i < this.data.length; i++) {
             let candle = new Candle(this.data[i]);
             timestamp.push(candle.eventTime);
             close.push(Number(candle.close));
@@ -181,34 +222,34 @@ class DataSimulator {
             ceiling.y.push(snapshot.ceiling);
         }
 
-        // let ema = 0, v = 0, a = 0, runningSum = 0, window = new Array(tradeConfig.WSize);
+        // let ema = 0, v = 0, a = 0, runningSum = 0, window = new Array(tradeConfig.wSize);
         // let pos = "buy";
         // for (let i = 0; i < this.data.length; i++) {
         //     timestamp.push(this.data[i][0]);
         //     close.push(Number(this.data[i][4]));
         //     let price = close[i], t = timestamp[i];
-        //     window[i % tradeConfig.WSize] = price;
-        //     runningSum += price - (i < tradeConfig.WSize ? 0 : close[i - tradeConfig.WSize]);
-        //     if (i < tradeConfig.WSize) {
+        //     window[i % tradeConfig.wSize] = price;
+        //     runningSum += price - (i < tradeConfig.wSize ? 0 : close[i - tradeConfig.wSize]);
+        //     if (i < tradeConfig.wSize) {
         //         ema = price;
         //     } else {
-        //         let ma = runningSum / tradeConfig.WSize;
-        //         let s = tradeConfig.S / (1.0 + tradeConfig.WSize);
+        //         let ma = runningSum / tradeConfig.wSize;
+        //         let s = tradeConfig.s / (1.0 + tradeConfig.wSize);
         //         ema = price * s + ema * (1 - s);
         //         let std = getStd(window, ma);
         //         floor.x.push(t);
         //         ceiling.x.push(t);
-        //         floor.y.push(ema - tradeConfig.BBFactor * std);
-        //         ceiling.y.push(ema + tradeConfig.BBFactor * std);
+        //         floor.y.push(ema - tradeConfig.bb * std);
+        //         ceiling.y.push(ema + tradeConfig.bb * std);
         //     }
         //
         //     // calculate vel/acc
-        //     if (i % tradeConfig.VWSize === 0 && i !== 0) {
-        //         v = price - close[i - tradeConfig.VWSize];
+        //     if (i % tradeConfig.vwSize === 0 && i !== 0) {
+        //         v = price - close[i - tradeConfig.vwSize];
         //         a = v - vel.y[vel.y.length - 1];
         //         vel.x.push(t);
         //         vel.y.push(v);
-        //         acc.x.push(timestamp[i - tradeConfig.VWSize], t);
+        //         acc.x.push(timestamp[i - tradeConfig.vwSize], t);
         //         acc.y.push(a, a);
         //     }
         //
@@ -224,7 +265,7 @@ class DataSimulator {
         //         // console.log("SEL t: " + timestamp[i] + " v: " + v.toFixed(2) + "\ta: " + a.toFixed(2));
         //         let gain = price - buys.y.slice(-1)[0];
         //         let lossThreshold = 1 - (price / buys.y.slice(-1)[0]);
-        //         if ((price > ceiling.y.slice(-1)[0] && v > 0 && a < 0 && gain >= 0) || lossThreshold >= tradeConfig.StopThreshold) {
+        //         if ((price > ceiling.y.slice(-1)[0] && v > 0 && a < 0 && gain >= 0) || lossThreshold >= tradeConfig.stopLimit) {
         //             sells.x.push(t);
         //             sells.y.push(price);
         //             pos = "buy";
@@ -237,7 +278,8 @@ class DataSimulator {
         }
         return {
             netGain: getNetGain(buys.y, sells.y),
-            trades: sells.y.length,
+            buys: buys,
+            sells: sells,
             plotData: [
                 {
                     x: timestamp,
@@ -334,14 +376,6 @@ class DataSimulator {
     }
 }
 
-function getStd(data, u) {
-    let sum = 0.0;
-    data.forEach(n => {
-        sum += Math.pow(n - u, 2);
-    });
-    return Math.sqrt(sum / data.length);
-}
-
 function getNetGain(buys, sells) {
     let sum = 0.0;
     buys.forEach(n => {
@@ -350,30 +384,29 @@ function getNetGain(buys, sells) {
     sells.forEach(n => {
         sum += n;
     });
-    // console.log("net gain = " + sum);
     return sum;
 }
 
 const modelConfig = new TradeConfig(
     "BTCUSDT",
     4,
-    8,
+    5,
     120,
     120,
-    0.2
+    0.05
 );
 const tradeConfig = new TradeConfig(
     "BTCUSDT",
-    2.5,
-    1,
-    85,
-    12,
-    0.05
+    2,
+    4,
+    80,
+    3,
+    0.01
 );
 
 const ds = new DataSimulator("data/BTCUSDT-1m-data.csv");
 
-ds.trainModel(modelConfig, "2020-05-01");
-// ds.trainModel(tradeConfig, "2020-05-01", "2020-05-02");
-// ds.simulateTradeStrategy(tradeConfig, "2020-05-01", "2020-05-02", true);
+// ds.trainModel(modelConfig, "2020-05-11");
+// ds.trainModel(modelConfig, "2020-05-01", "2020-05-02");
+// ds.simulateTradeStrategy(tradeConfig, "2020-05-11", null, true);
 // ds.simulateTradeStrategy(2, 1.5, 65, 15, "2020-05-01");
