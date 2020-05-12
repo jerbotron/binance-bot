@@ -1,11 +1,10 @@
 node_modules/
 logs/
-analytics/data/
-analytics/model/
-analytics/simulation/
+src/analytics/data/
+src/analytics/model/
+src/analytics/simulation/
 package-lock.json
 config.json
 src/test.js
-log.txt
 .idea/
 ngrok
