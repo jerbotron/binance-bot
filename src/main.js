@@ -3,7 +3,7 @@
 "use strict";
 
 const Binance = require('binance-api-node').default;
-var figlet = require('figlet');
+const figlet = require('figlet');
 
 const app = require('./alertbot/Webhook');
 const DataEngine = require('./tradebot/DataEngine');
@@ -29,12 +29,13 @@ function main() {
 
     const tradeConfig = new TradeConfig(
         "BTCUSDT",
-        2,
-        4,
-        80,
-        3,
-        0.01,
-        Position.BUY);
+        1,
+        2.5,
+        35,
+        11,
+        0.02,
+        Position.SELL,
+        true);
     tradeConfig.log();
 
     // Initialize App Components
@@ -43,7 +44,7 @@ function main() {
     const autoTrader = new AutoTrader(client, tradeConfig.symbol, dataEngine, eventLogger);
 
     // Start App
-    app.listen(8080, () => console.log('Jerbotron webhook listening on port 8080...'));
+    // app.listen(8080, () => console.log('Jerbotron webhook listening on port 8080...'));
     dataEngine.start();
 
     process.on("SIGINT", () => {

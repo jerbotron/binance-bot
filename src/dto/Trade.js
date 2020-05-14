@@ -16,7 +16,7 @@ class TradeConfig {
         wSize,
         vWSize,
         stopLimit,
-        position,
+        position = Position.BUY,
         isSimulation = true
     ) {
         this.symbol = symbol;

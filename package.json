@@ -19,7 +19,8 @@
     "lodash": "^4.17.15",
     "plotly": "^1.0.6",
     "rxjs": "^5.5.6",
-    "winston": "^2.4.0"
+    "winston": "^2.4.0",
+    "worker-threads-pool": "^2.0.0"
   },
   "devDependencies": {
     "babel-cli": "^6.26.0",

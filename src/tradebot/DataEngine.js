@@ -35,13 +35,12 @@ class DataEngine {
         this.pos = this.tradeConfig.position;
 
         let decisionHandler = (decision) => {
-            if (decision.pos === Position.BUY || decision === Position.SELL) {
+            if (decision.pos === Position.BUY || decision.pos === Position.SELL) {
                 if (this.tradeConfig.isSimulation) {
-                    this.setPosition(decision.pos === Position.BUY ? Position.SELL : Position.BUY);
-                } else {
-                    this.emitTradeDecision(decision);
-                    this.setPosition(Position.PENDING);
+                    decision.isSimulation = true;
                 }
+                this.emitTradeDecision(decision);
+                this.setPosition(Position.PENDING);
             } else {
                 this.logger.logError("received invalid decision event, " + decision.pos);
             }
@@ -55,8 +54,12 @@ class DataEngine {
                     let date = new Date(candle.eventTime);
                     let curMinute = date.getUTCMinutes() === 0 ? 60 : date.getUTCMinutes();
                     let lastMinute = this.snapshot.timestamp.getUTCMinutes();
-                    if (curMinute - lastMinute === 1 && candle.isFinal) {
-                        this.snapshot.appendAndEvaluateTradeDecision(this.pos, candle, decisionHandler);
+                    if (curMinute - lastMinute >= 1) {
+                        if (candle.isFinal) {
+                            this.snapshot.appendAndEvaluateTradeDecision(this.pos, candle, decisionHandler);
+                        } else {
+
+                        }
                         this.logger.logCandle(candle);
                     }
                 })
@@ -143,7 +146,7 @@ class DataEngine {
                 }
             },
             e => {
-                this.logger.logError("onOrderStatus() error, " + e);
+                this.logger.logError("failed to complete an order, " + e);
             },
             () => {
                 this.logger.logInfo("order status subscription stream closed");

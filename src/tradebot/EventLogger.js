@@ -23,8 +23,8 @@ class EventLogger {
 
     logStart(base, quote) {
         console.log(`${Event.Start}\tSystem starting! Initial balances:`);
-        console.log(`\t* ${base.symbol}\tfree: ${base.free}\t locked: ${base.locked}`);
-        console.log(`\t* ${quote.symbol}\tfree: ${quote.free}\t locked: ${quote.locked}`);
+        console.log(`\t* Base: \t${base.symbol} \tfree: ${base.free}\t locked: ${base.locked}`);
+        console.log(`\t* Quote:\t${quote.symbol}\tfree: ${quote.free}\t locked: ${quote.locked}`);
         this.logger.write([Event.Start, base.symbol, base.free, base.locked, quote.symbol, quote.free, quote.locked].join(',') + "\n");
     }
 
@@ -37,7 +37,7 @@ class EventLogger {
 
     // https://github.com/binance-exchange/binance-api-node#order
     logOrder(order) {
-        let msg = [Event.Order, new Date(order.transactTime).toISOString(), order.orderId, order.type, order.side, order.executedQty, order.cummulativeQuoteQty];
+        let msg = [Event.Order, new Date(order.transactTime).toISOString(), order.orderId, order.side, order.price, order.executedQty, order.cummulativeQuoteQty];
         console.log(msg.join('\t'));
         this.logger.write(msg.join(',') + "\n");
     }

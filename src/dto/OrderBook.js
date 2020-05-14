@@ -15,8 +15,8 @@ class Balance {
     }
 
     update(balance) {
-        this.free = Number(balance.free).toPrecision(this.precision);
-        this.locked = Number(balance.locked).toPrecision(this.precision);
+        this.free = Number(balance.free);
+        this.locked = Number(balance.locked);
         if (!this.origQty) {
             this.origQty = this.free;
         }
@@ -30,28 +30,25 @@ class Balance {
 class OrderBook {
     constructor(client, symbol, data, eventLogger) {
         this.client = client;
+        this.logger = eventLogger;
         data.symbols.forEach(asset => {
             if (asset.symbol === symbol) {
-                this.precision = Number(asset.baseAssetPrecision);
-                this.baseBalance = new Balance(asset.baseAsset, this.precision);
-                this.quoteBalance = new Balance(asset.quoteAsset, this.precision);
-                this.bnbBalance = new Balance("BNB");
                 asset.filters.forEach(filter => {
-                    switch (filter) {
-                        case FilterType.PRICE_FILTER:
-                            this.minTick = Number(filter.tickSize);
-                            break;
+                    switch (filter.filterType) {
                         case FilterType.LOT_SIZE:
                             this.minQty = Number(filter.minQty);
+                            this.precision = parseFloat(filter.stepSize).toString().split('.')[1].length;
                             break;
                         case FilterType.MIN_NOTIONAL:
                             this.minNotional = Number(filter.minNotional);
                             break;
                     }
-                })
+                });
+                this.baseBalance = new Balance(asset.baseAsset, this.precision);
+                this.quoteBalance = new Balance(asset.quoteAsset, this.precision);
+                this.bnbBalance = new Balance("BNB");
             }
         });
-        this.logger = eventLogger;
         this.lastPrice = 0;
         this.updateBalances().then(() => {
             this.logger.logStart(this.baseBalance, this.quoteBalance);
@@ -80,15 +77,15 @@ class OrderBook {
     getTradeQty(pos, price) {
         let qty = 0;
         if (pos === Position.BUY) {
-            qty = Math.floor(this.quoteBalance.free / price);
+            qty = this.quoteBalance.free / price;
             this.lastPrice = price;
         } else if (pos === Position.SELL) {
-            qty = Math.floor(this.baseBalance.free / price);
+            qty = this.baseBalance.free;
         } else {
             this.logger.logError("Error: getTradeQty(), unexpected position, " + pos);
             return 0;
         }
-        return Number(qty.toPrecision(this.precision))
+        return qty.toFixed(this.precision)
     }
 
     stop() {

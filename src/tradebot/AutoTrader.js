@@ -3,12 +3,8 @@
 "use strict";
 
 const Rx = require('rxjs/Rx');
-const {
-    TradeDecision
-} = require("../dto/Trade");
 const OrderBook = require("../dto/OrderBook");
 const {
-    Position,
     OrderType
 } = require('../common/Constants');
 
@@ -38,6 +34,8 @@ class AutoTrader {
         // Init account info
         this.getExchangeInfo().then(res => {
             this.orderBook = new OrderBook(client, symbol, res, eventLogger);
+        }).catch(e => {
+            this.logger.logError(`failed to get exchange info, ${e}`);
         });
     }
 
@@ -70,29 +68,28 @@ class AutoTrader {
             quantity: this.orderBook.getTradeQty(decision.pos, decision.price)
             //price: decision.price (price not required from market orders
         };
-        try {
-            this.client.order(order).then(res => {
-                if (res.status === "FILLED") {
-                    this.orderSubject.next(res);
-                    this.logger.logOrder(res);
-                } else {
-                    this.logger.logError("order was not fully filled, id = " + res.orderId);
-                }
-                this.orderBook.updateBalances().then();
+        if (decision.isSimulation) {
+            this.client.orderTest(order).then(() => {
+                this.orderSubject.next({side: decision.pos});
+                this.logger.logInfo(`Simulated a ${decision.pos} order at ${decision.price}`);
             });
-        } catch (e) {
-            this.logger.logError("error occurred in sendOrder(), " + e);
-            this.orderSubject.error(e);
+            return;
         }
+        this.client.order(order).then(res => {
+            if (res.status === "FILLED") {
+                this.orderSubject.next(res);
+                this.logger.logOrder(res);
+            } else {
+                this.logger.logError("order was not fully filled, id = " + res.orderId);
+            }
+            this.orderBook.updateBalances().then();
+        }).catch(e => {
+            this.orderSubject.error(e);
+        });
     }
 
     async getExchangeInfo() {
-        try {
-            return await this.client.exchangeInfo();
-        } catch (e) {
-            // this.msgBot.say("Errored in getExchangeInfo()");
-            this.logger.logError("failed to get exchange info, " + e);
-        }
+        return await this.client.exchangeInfo();
     }
 }
 
