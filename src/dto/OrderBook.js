@@ -37,7 +37,8 @@ class OrderBook {
                     switch (filter.filterType) {
                         case FilterType.LOT_SIZE:
                             this.minQty = Number(filter.minQty);
-                            this.precision = parseFloat(filter.stepSize).toString().split('.')[1].length;
+                            this.stepSize = parseFloat(filter.stepSize);
+                            this.precision = this.stepSize.toString().split('.')[1].length;
                             break;
                         case FilterType.MIN_NOTIONAL:
                             this.minNotional = Number(filter.minNotional);

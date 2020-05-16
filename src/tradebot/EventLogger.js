@@ -36,8 +36,8 @@ class EventLogger {
     }
 
     // https://github.com/binance-exchange/binance-api-node#order
-    logOrder(order) {
-        let msg = [Event.Order, new Date(order.transactTime).toISOString(), order.orderId, order.side, order.price, order.executedQty, order.cummulativeQuoteQty];
+    logOrder(order, price) {
+        let msg = [Event.Order, new Date(order.transactTime).toISOString(), order.orderId, order.side, price, order.executedQty, order.cummulativeQuoteQty];
         console.log(msg.join('\t'));
         this.logger.write(msg.join(',') + "\n");
     }

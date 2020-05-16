@@ -29,13 +29,13 @@ function main() {
 
     const tradeConfig = new TradeConfig(
         "BTCUSDT",
-        1,
-        2.5,
-        35,
-        11,
-        0.02,
+        1.5,
+        2,
+        20,
+        5,
+        0.01,
         Position.SELL,
-        true);
+        false);
     tradeConfig.log();
 
     // Initialize App Components

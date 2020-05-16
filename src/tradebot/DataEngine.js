@@ -54,12 +54,8 @@ class DataEngine {
                     let date = new Date(candle.eventTime);
                     let curMinute = date.getUTCMinutes() === 0 ? 60 : date.getUTCMinutes();
                     let lastMinute = this.snapshot.timestamp.getUTCMinutes();
-                    if (curMinute - lastMinute >= 1) {
-                        if (candle.isFinal) {
-                            this.snapshot.appendAndEvaluateTradeDecision(this.pos, candle, decisionHandler);
-                        } else {
-
-                        }
+                    if (curMinute - lastMinute >= 1 && candle.isFinal) {
+                        this.snapshot.updateAndEvaluateTradeDecision(this.pos, candle, decisionHandler);
                         this.logger.logCandle(candle);
                     }
                 })

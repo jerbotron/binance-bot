@@ -60,6 +60,7 @@ class TradeSnapshot {
     ) {
         this.tradeConfig = tradeConfig;
         this.window = new SlidingWindow(tradeConfig.wSize);
+        this.s = this.tradeConfig.s / (1.0 + this.tradeConfig.wSize);
         this.vel = 0;
         this.acc = 0;
         for (let i = 0; i < snapshotData.length; i++) {
@@ -73,54 +74,54 @@ class TradeSnapshot {
         this.prevBuy = null;
     }
 
-    appendAndEvaluateTradeDecision(pos,
+    updateAndEvaluateTradeDecision(pos,
                                    candle,
                                    decisionHandler = () => {
                                    },
                                    velAccHandler = () => {
                                    }
     ) {
+        // Update window data and set timestamp
         let close = Number(candle.close);
         this.window.push(close);
-        let s = this.tradeConfig.s / (1.0 + this.tradeConfig.wSize);
-        this.ema = close * s + this.ema * (1 - s);
+        this.timestamp = candle.eventType === "kline" ? new Date(candle.eventTime) : candle.eventTime;
+
+        // Update trade signals
         let std = this.window.getStd();
+        this.ema = close * this.s + this.ema * (1 - this.s);
         this.floor = this.ema - this.tradeConfig.bb * std;
         this.ceiling = this.ema + this.tradeConfig.bb * std;
-        this.updateVelAndAcc(candle.eventTime, close, velAccHandler);
-        if (candle.eventType === "kline") {
-            this.timestamp = new Date(candle.eventTime);
-        } else if (candle.eventType === "log") {
-            this.timestamp = candle.eventTime;
-        } else {
-            console.log("Error: invalid candle format, " + candle.eventType);
-        }
+        let [curVel, curAcc] = this.updateVelAndAcc(candle.eventTime, close, velAccHandler);
 
         // evaluate trade decision
-        if (pos === Position.BUY && close < this.floor && this.vel < 0 && this.acc > 0) {
+        if (pos === Position.BUY && close < this.floor && curVel < 0 && curAcc > 0) {
             this.prevBuy = close;
             decisionHandler(new TradeDecision(this.timestamp, Position.BUY, this.tradeConfig.symbol, close));
         } else if (pos === Position.SELL && this.prevBuy) {
             let gain = close - this.prevBuy;
             let lossThreshold = 1 - (close / this.prevBuy);
-            if ((close > this.ceiling && this.vel > 0 && this.acc < 0 && gain >= 0) ||
+            if ((close > this.ceiling && curVel > 0 && curAcc < 0 && gain >= 0) ||
                 lossThreshold >= this.tradeConfig.stopLimit) {
                 decisionHandler(new TradeDecision(this.timestamp, Position.SELL, this.tradeConfig.symbol, close));
             }
         }
     }
 
+    // returns [curVel, curAcc] as an array
     updateVelAndAcc(timestamp,
-                    price,
+                    close,
                     handler = () => {
                     }
     ) {
+        let curVel = close - this.window.lastN(this.tradeConfig.vwSize);
+        let curAcc = curVel - this.vel;
+        handler(timestamp, curVel, curAcc);
+        // Update vel/acc references at vWSize intervals
         if (this.window.isAtMultipleOf(this.tradeConfig.vwSize)) {
-            let prevVel = this.vel;
-            this.vel = price - this.window.lastN(this.tradeConfig.vwSize);
-            this.acc = this.vel - prevVel;
-            handler(timestamp, this.vel, this.acc);
+            this.acc = curVel - this.vel;
+            this.vel = curVel;
         }
+        return [curVel, curAcc]
     }
 }
 

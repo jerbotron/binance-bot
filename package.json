@@ -11,7 +11,7 @@
   "author": "Jeremy Wang",
   "license": "MIT",
   "dependencies": {
-    "binance-api-node": "^0.4.3",
+    "binance-api-node": "github:jerbotron/binance-api-node",
     "body-parser": "^1.18.2",
     "bootbot": "^1.0.14",
     "express": "^4.16.2",

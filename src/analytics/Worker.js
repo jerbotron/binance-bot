@@ -51,7 +51,7 @@ function runSimulation(data, tradeConfig) {
         let candle = new Candle(data[i]);
         timestamp.push(candle.eventTime);
         close.push(Number(candle.close));
-        snapshot.appendAndEvaluateTradeDecision(pos, candle, decisionHandler, velAccHandler);
+        snapshot.updateAndEvaluateTradeDecision(pos, candle, decisionHandler, velAccHandler);
         floor.x.push(candle.eventTime);
         floor.y.push(snapshot.floor);
         ceiling.x.push(candle.eventTime);

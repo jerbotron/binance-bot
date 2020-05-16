@@ -178,13 +178,13 @@ class DataSimulator {
 
 const ds = new DataSimulator("data/BTCUSDT-1m-data.csv");
 const modelConfig = new TradeConfig(
-    "BTCUSDT", 3, 3, 120, 120, 0.02);
+    "BTCUSDT", 3, 5, 120, 120, 0.02);
 
 // ds.trainModel(modelConfig, "2020-04-01", "2020-05-01");
-// ds.trainModel(modelConfig, "2020-05-01", "2020-05-02");
+// ds.trainModel(modelConfig, "2020-05-01", null);
 
 const tradeConfig = new TradeConfig(
-    "BTCUSDT", 1, 2.5, 35, 11, 0.02);
+    "BTCUSDT", 1.5, 2, 20, 5, 0.01);
 
-ds.simulateTradeStrategy(tradeConfig, "2020-05-13", null, true);
+ds.simulateTradeStrategy(tradeConfig, "2020-05-01", null, true);
 // ds.simulateTradeStrategy(2, 1.5, 65, 15, "2020-05-01");

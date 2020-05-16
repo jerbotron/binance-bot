@@ -5,6 +5,7 @@
 const Rx = require('rxjs/Rx');
 const OrderBook = require("../dto/OrderBook");
 const {
+    Position,
     OrderType
 } = require('../common/Constants');
 
@@ -65,8 +66,8 @@ class AutoTrader {
             symbol: decision.symbol,
             side: decision.pos,
             type: type,
-            quantity: this.orderBook.getTradeQty(decision.pos, decision.price)
-            //price: decision.price (price not required from market orders
+            quantity: decision.pos === Position.SELL ? this.orderBook.getTradeQty(decision.pos, decision.price) : null,
+            quoteOrderQty: decision.pos === Position.BUY ? this.orderBook.getTradeQty(decision.pos, decision.price) : null
         };
         if (decision.isSimulation) {
             this.client.orderTest(order).then(() => {
@@ -78,12 +79,13 @@ class AutoTrader {
         this.client.order(order).then(res => {
             if (res.status === "FILLED") {
                 this.orderSubject.next(res);
-                this.logger.logOrder(res);
+                this.logger.logOrder(res, decision.price);
             } else {
                 this.logger.logError("order was not fully filled, id = " + res.orderId);
             }
             this.orderBook.updateBalances().then();
         }).catch(e => {
+            this.logger.logError(`${order.type} ${order.side} at ${decision.price} failed, qty: ${order.quantity}`);
             this.orderSubject.error(e);
         });
     }
