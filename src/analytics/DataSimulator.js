@@ -2,7 +2,6 @@
 
 "use strict";
 
-const path = require("path");
 const CONFIG = require("../../config.json");
 const plotly = require("plotly")(CONFIG.PLOTLY_USERNAME, CONFIG.PLOTLY_API_KEY);
 const fs = require("fs");
@@ -57,7 +56,7 @@ class DataSimulator {
     }
 
     // startDate/endDate in YYYY-MM-DD format
-    trainModel(modelConfig, startDate, endDate = null, poolSize = 2) {
+    trainModel(modelConfig, startDate, endDate = null, poolSize = 1) {
         if (!endDate) {
             endDate = new Date(Date.now());
             endDate.setDate(endDate.getDate() + 1);
@@ -184,7 +183,7 @@ const modelConfig = new TradeConfig(
 // ds.trainModel(modelConfig, "2020-05-01", null);
 
 const tradeConfig = new TradeConfig(
-    "BTCUSDT", 1.5, 2, 20, 5, 0.01);
+    "BTCUSDT", 1.5, 2, 20, 5, 0.01, Position.BUY);
 
-ds.simulateTradeStrategy(tradeConfig, "2020-05-01", null, true);
+ds.simulateTradeStrategy(tradeConfig, "2020-05-17", null, true);
 // ds.simulateTradeStrategy(2, 1.5, 65, 15, "2020-05-01");

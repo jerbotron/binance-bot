@@ -3,6 +3,7 @@
 "use strict";
 
 const fs = require('fs');
+const AlertBot = require('../alertbot/AlertBot');
 
 const Event = Object.freeze({
     Start: "START",
@@ -15,6 +16,7 @@ const Event = Object.freeze({
 
 class EventLogger {
     constructor(symbol) {
+        this.msgBot = new AlertBot();
         let curTime = new Date().toISOString().split('Z')[0];
         this.logger = fs.createWriteStream(`../logs/${symbol}_${curTime}.csv`, {
             flags: "w"
@@ -40,16 +42,19 @@ class EventLogger {
         let msg = [Event.Order, new Date(order.transactTime).toISOString(), order.orderId, order.side, price, order.executedQty, order.cummulativeQuoteQty];
         console.log(msg.join('\t'));
         this.logger.write(msg.join(',') + "\n");
+        this.msgBot.say(msg.join(','));
     }
 
     logInfo(msg) {
         console.log(`${Event.Info}\t${msg}`);
+        this.msgBot.say(`${Event.Info}\t${msg}`);
     }
 
     logError(err) {
         let msg = [Event.Error, err];
         console.log(msg.join('\t'));
         this.logger.write(msg.join(',') + "\n");
+        this.msgBot.say(msg.join(','));
     }
 
     logStop(base, quote) {

@@ -20,7 +20,7 @@ function runSimulation(data, tradeConfig) {
     let floor = {x: [], y: []}, ceiling = {x: [], y: []};
     let vel = {x: [], y: []};
     let acc = {x: [], y: []};
-    let pos = Position.BUY;
+    let pos = tradeConfig.position;
 
     // Define event handlers
     let decisionHandler = (decision) => {
@@ -58,9 +58,12 @@ function runSimulation(data, tradeConfig) {
         ceiling.y.push(snapshot.ceiling);
     }
 
-    if (pos === Position.SELL) {
+    if (buys.x.length > sells.x.length) {
         buys.x.pop();
         buys.y.pop();
+    } else if (sells.x.length > buys.x.length) {
+        sells.x.shift();
+        sells.y.shift();
     }
     let netGain = (buys, sells) => {
         let sum = 0.0;

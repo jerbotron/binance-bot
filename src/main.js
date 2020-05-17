@@ -34,7 +34,7 @@ function main() {
         20,
         5,
         0.01,
-        Position.SELL,
+        Position.BUY,
         false);
     tradeConfig.log();
 
@@ -44,7 +44,7 @@ function main() {
     const autoTrader = new AutoTrader(client, tradeConfig.symbol, dataEngine, eventLogger);
 
     // Start App
-    // app.listen(8080, () => console.log('Jerbotron webhook listening on port 8080...'));
+    app.listen(8080, () => console.log('Jerbotron webhook listening on port 8080...'));
     dataEngine.start();
 
     process.on("SIGINT", () => {

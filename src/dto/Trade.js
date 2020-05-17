@@ -97,9 +97,9 @@ class TradeSnapshot {
         if (pos === Position.BUY && close < this.floor && curVel < 0 && curAcc > 0) {
             this.prevBuy = close;
             decisionHandler(new TradeDecision(this.timestamp, Position.BUY, this.tradeConfig.symbol, close));
-        } else if (pos === Position.SELL && this.prevBuy) {
-            let gain = close - this.prevBuy;
-            let lossThreshold = 1 - (close / this.prevBuy);
+        } else if (pos === Position.SELL) {
+            let gain = this.prevBuy ? close - this.prevBuy : 0;
+            let lossThreshold = this.prevBuy ? 1 - (close / this.prevBuy) : 0;
             if ((close > this.ceiling && curVel > 0 && curAcc < 0 && gain >= 0) ||
                 lossThreshold >= this.tradeConfig.stopLimit) {
                 decisionHandler(new TradeDecision(this.timestamp, Position.SELL, this.tradeConfig.symbol, close));

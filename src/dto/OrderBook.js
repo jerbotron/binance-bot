@@ -6,6 +6,9 @@ const {
     Position,
     FilterType
 } = require("../common/Constants");
+const {
+    roundDown
+} = require("../common/Utils");
 
 class Balance {
     constructor(symbol, precision = 8) {
@@ -78,7 +81,7 @@ class OrderBook {
     getTradeQty(pos, price) {
         let qty = 0;
         if (pos === Position.BUY) {
-            qty = this.quoteBalance.free / price;
+            qty = this.quoteBalance.free;
             this.lastPrice = price;
         } else if (pos === Position.SELL) {
             qty = this.baseBalance.free;
@@ -86,7 +89,7 @@ class OrderBook {
             this.logger.logError("Error: getTradeQty(), unexpected position, " + pos);
             return 0;
         }
-        return qty.toFixed(this.precision)
+        return roundDown(qty, this.precision);
     }
 
     stop() {

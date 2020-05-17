@@ -65,10 +65,13 @@ class AutoTrader {
         let order = {
             symbol: decision.symbol,
             side: decision.pos,
-            type: type,
-            quantity: decision.pos === Position.SELL ? this.orderBook.getTradeQty(decision.pos, decision.price) : null,
-            quoteOrderQty: decision.pos === Position.BUY ? this.orderBook.getTradeQty(decision.pos, decision.price) : null
+            type: type
         };
+        if (decision.pos === Position.BUY) {
+            order.quoteOrderQty = this.orderBook.getTradeQty(decision.pos, decision.price);
+        } else if (decision.pos === Position.SELL) {
+            order.quantity = this.orderBook.getTradeQty(decision.pos, decision.price);
+        }
         if (decision.isSimulation) {
             this.client.orderTest(order).then(() => {
                 this.orderSubject.next({side: decision.pos});
@@ -85,7 +88,7 @@ class AutoTrader {
             }
             this.orderBook.updateBalances().then();
         }).catch(e => {
-            this.logger.logError(`${order.type} ${order.side} at ${decision.price} failed, qty: ${order.quantity}`);
+            this.logger.logError(`${order.type} ${order.side} at ${decision.price} failed, qty: ${order.quantity}, quoteQty: ${order.quoteOrderQty}`);
             this.orderSubject.error(e);
         });
     }
