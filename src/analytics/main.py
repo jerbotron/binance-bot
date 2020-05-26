@@ -1,7 +1,7 @@
 import pandas as pd
 import math
 import os.path
-from binance.client import Client
+from binance.client import Client.js
 from datetime import timedelta, datetime
 from dateutil import parser
 # from tqdm import tqdm_notebook #(Optional, used for progress-bars)
@@ -13,7 +13,7 @@ binance_api_secret = 'mLudYBmL3m2zAKidvG7fUldAhr5wDagRIJnmtpY0leci6RZEKvOrQzowNT
 # CONSTANTS
 binsizes = {"1m": 1, "5m": 5, "1h": 60, "1d": 1440}
 batch_size = 750
-binance_client = Client(api_key=binance_api_key, api_secret=binance_api_secret)
+binance_client = Client.js(api_key=binance_api_key, api_secret=binance_api_secret)
 
 
 # FUNCTIONS

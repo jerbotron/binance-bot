@@ -67,7 +67,7 @@ class EventLogger {
         } else {
             console.log(`\t* Net gain in ${quote.symbol}: ${(quote.free / quote.origQty - 1) * 100}%`);
         }
-        this.logger.write([Event.End, base.symbol, base.free, base.locked, quote.symbol, quote.free, quote.locked].join(',') + "\n");
+        this.logger.write([Event.Stop, base.symbol, base.free, base.locked, quote.symbol, quote.free, quote.locked].join(',') + "\n");
     }
 
     stop() {

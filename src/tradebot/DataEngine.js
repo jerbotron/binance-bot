@@ -2,18 +2,19 @@
 
 "use strict";
 
-const http = require('https');
-const querystring = require('querystring');
 const Rx = require('rxjs/Rx');
 const {
+    GetHistoricalKlines
+} = require('../http/Client');
+const {
     TradeSnapshot
-} = require('../dto/Trade.js');
+} = require('../dto/Trade');
 const {
     formatDate,
-} = require('../common/Utils.js');
+} = require('../common/Utils');
 const {
     Position
-} = require('../common/Constants.js');
+} = require('../common/Constants');
 
 /*
 	DataEngine processes ticker/trade data from web socket stream and evaluates trade decisions in realtime.
@@ -80,42 +81,13 @@ class DataEngine {
 
         this.logger.logInfo(`backfilling data from ${formatDate(startTime)} to ${formatDate(curTime)}`);
 
-        const params = {
-            'symbol': this.tradeConfig.symbol,
-            'interval': '1m',
-            'startTime': startTime.getTime(),
-            'endTime': curTime.getTime(),
-        };
-        const path = '/api/v3/klines?' + querystring.stringify(params);
-        const options = {
-            hostname: 'api.binance.com',
-            path: path,
-            method: 'GET'
-        };
-        let requestHistoricalKlines = (resolve, reject) => {
-            let req = http.request(options, res => {
-                if (res.statusCode < 200 || res.statusCode >= 300) {
-                    return reject(new Error('statusCode=' + res.statusCode));
+        return GetHistoricalKlines(this.tradeConfig.symbol, startTime.getTime(), curTime.getTime())
+            .then(body => {
+                    return new Promise(resolve => {
+                        resolve(new TradeSnapshot(this.tradeConfig, body));
+                    });
                 }
-                let body = [];
-                res.on('data', chunk => {
-                    body.push(chunk);
-                });
-                res.on('end', () => {
-                    try {
-                        body = JSON.parse(Buffer.concat(body).toString());
-                    } catch (e) {
-                        reject(e);
-                    }
-                    resolve(new TradeSnapshot(this.tradeConfig, body));
-                });
-            });
-            req.on('error', err => {
-                reject(err);
-            });
-            req.end();
-        };
-        return new Promise(requestHistoricalKlines);
+            );
     }
 
     setPosition(pos) {

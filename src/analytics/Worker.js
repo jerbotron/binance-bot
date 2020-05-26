@@ -5,106 +5,99 @@
 const {isMainThread, parentPort, workerData} = require('worker_threads');
 const {
     Position
-} = require("../common/Constants.js");
+} = require("../common/Constants");
 const {
     TradeSnapshot,
 } = require("../dto/Trade");
 const {
     Candle,
 } = require("../dto/Candle");
+const PlotData = require("./PlotData");
+
+// Returns: 1 = +cross, -1 = -cross, 0 = no cross
+function emaCrossed(ema, close) {
+    if (ema.length === 2 && close.length === 2) {
+        if (close[0] < ema[0] && close[1] > ema[1]) {
+            return 1;
+        } else if (close[0] > ema[0] && close[1] < ema[1]) {
+            return -1;
+        }
+    }
+    return 0;
+}
 
 function runSimulation(data, tradeConfig) {
     // Create plot data
-    let timestamp = [], close = [];
-    let buys = {x: [], y: []}, sells = {x: [], y: []};
-    let floor = {x: [], y: []}, ceiling = {x: [], y: []};
-    let vel = {x: [], y: []};
-    let acc = {x: [], y: []};
+    let close = new PlotData("close"), ema = new PlotData("ema");
+    let buys = new PlotData("buys"), sells = new PlotData("sells");
+    let floor = new PlotData("floor"), ceiling = new PlotData("ceiling");
+    let emaCrossUp = new PlotData("cross_up"), emaCrossDown = new PlotData("cross_down");
+    let vel = new PlotData("vel"), acc = new PlotData("acc");
+    let velMarkers = new PlotData("vel_markers");
     let pos = tradeConfig.position;
 
     // Define event handlers
     let decisionHandler = (decision) => {
         if (decision.pos === Position.BUY) {
-            buys.x.push(decision.timestamp);
-            buys.y.push(decision.price);
+            buys.push(decision.timestamp, decision.price);
             pos = Position.SELL;
         } else if (decision.pos === Position.SELL) {
-            sells.x.push(decision.timestamp);
-            sells.y.push(decision.price);
+            sells.push(decision.timestamp, decision.price);
             pos = Position.BUY;
         }
     };
     let velAccHandler = (t, v, a) => {
-        vel.x.push(t);
-        vel.y.push(v);
-        if (acc.x.length > 0) {
-            acc.x.push(acc.x[acc.x.length - 1]);
-            acc.y.push(a);
+        vel.push(t, v);
+        if (vel.x.length % tradeConfig.vwSize === 0) {
+            velMarkers.push(t, v);
         }
-        acc.x.push(t);
-        acc.y.push(a);
+        if (acc.x.length > 0) {
+            acc.push(acc.x[acc.x.length - 1], a);
+        }
+        acc.push(t, a);
     };
 
     // Create trade snapshot and begin simulation
     let snapshot = new TradeSnapshot(tradeConfig, data.slice(0, tradeConfig.wSize), false, velAccHandler);
-    for (let i = tradeConfig.wSize; i < data.length; i++) {
+    for (let i = 0; i < data.length; i++) {
         let candle = new Candle(data[i]);
-        timestamp.push(candle.eventTime);
-        close.push(Number(candle.close));
+        close.push(candle.eventTime, Number(candle.close));
+        if (i < tradeConfig.wSize) {
+            continue;
+        }
         snapshot.updateAndEvaluateTradeDecision(pos, candle, decisionHandler, velAccHandler);
-        floor.x.push(candle.eventTime);
-        floor.y.push(snapshot.floor);
-        ceiling.x.push(candle.eventTime);
-        ceiling.y.push(snapshot.ceiling);
+        ema.push(candle.eventTime, snapshot.ema);
+        switch (emaCrossed(ema.y.slice(-2), close.y.slice(-2))) {
+            case 1:
+                emaCrossUp.push(candle.eventTime, snapshot.ema);
+                break;
+            case -1:
+                emaCrossDown.push(candle.eventTime, snapshot.ema);
+                break;
+        }
+        floor.push(candle.eventTime, snapshot.floor);
+        ceiling.push(candle.eventTime, snapshot.ceiling);
     }
 
     if (buys.x.length > sells.x.length) {
-        buys.x.pop();
-        buys.y.pop();
+        buys.pop();
     } else if (sells.x.length > buys.x.length) {
-        sells.x.shift();
-        sells.y.shift();
+        sells.shift();
     }
-    let netGain = (buys, sells) => {
-        let sum = 0.0;
-        buys.forEach(n => {
-            sum -= n;
-        });
-        sells.forEach(n => {
-            sum += n;
-        });
-        return sum;
-    };
     return {
         config: tradeConfig,
         buys: buys,
         sells: sells,
-        netGain: netGain(buys.y, sells.y),
+        netGain: sells.sum() - buys.sum(),
         plotData:
             [
-                {
-                    x: timestamp,
-                    y: close,
-                    name: "close",
-                    type: "scatter"
-                },
-                {
-                    x: floor.x,
-                    y: floor.y,
-                    name: "floor",
-                    type: "scatter"
-                },
-                {
-                    x: ceiling.x,
-                    y: ceiling.y,
-                    name: "ceiling",
-                    type: "scatter"
-                },
-                {
-                    x: buys.x,
-                    y: buys.y,
-                    name: "buys",
-                    type: "scatter",
+                close.getPlotData(),
+                floor.getPlotData(),
+                ceiling.getPlotData(),
+                ema.getPlotData(),
+                // emaCrossUp.getPlotData({mode: "markers"}),
+                // emaCrossDown.getPlotData({mode: "markers"}),
+                buys.getPlotData({
                     mode: "markers",
                     marker: {
                         size: 8,
@@ -112,13 +105,9 @@ function runSimulation(data, tradeConfig) {
                             color: "white",
                             width: 0.5
                         }
-                    },
-                },
-                {
-                    x: sells.x,
-                    y: sells.y,
-                    name: "sells",
-                    type: "scatter",
+                    }
+                }),
+                sells.getPlotData({
                     mode: "markers",
                     marker: {
                         size: 8,
@@ -126,43 +115,32 @@ function runSimulation(data, tradeConfig) {
                             color: "white",
                             width: 0.5
                         }
-                    },
-                },
-                {
-                    x: vel.x,
-                    y: vel.y,
-                    name: "vel",
-                    type: "scatter",
+                    }
+                }),
+                velMarkers.getPlotData({
+                    y: new Array(velMarkers.y.length).fill(0),
                     yaxis: "y2",
-                },
-                {
-                    x: acc.x,
-                    y: acc.y,
-                    name: "acc",
-                    type: "scatter",
-                    yaxis: "y2",
-                },
-                {
-                    x: buys.x,
-                    y: new Array(buys.x.length).fill(0),
-                    yaxis: "y2",
+                    mode: "markers"
+                }),
+                vel.getPlotData({yaxis: "y2"}),
+                acc.getPlotData({yaxis: "y2"}),
+                buys.getPlotData({
+                    y: new Array(buys.y.length).fill(0),
                     name: "b",
-                    type: "scatter",
-                    mode: "markers",
-                    marker: {
-                        size: 8,
-                        line: {
-                            color: "white",
-                            width: 0.5
-                        }
-                    },
-                },
-                {
-                    x: sells.x,
-                    y: new Array(sells.x.length).fill(0),
                     yaxis: "y2",
+                    mode: "markers",
+                    marker: {
+                        size: 8,
+                        line: {
+                            color: "white",
+                            width: 0.5
+                        }
+                    }
+                }),
+                sells.getPlotData({
+                    y: new Array(sells.y.length).fill(0),
                     name: "s",
-                    type: "scatter",
+                    yaxis: "y2",
                     mode: "markers",
                     marker: {
                         size: 8,
@@ -171,15 +149,31 @@ function runSimulation(data, tradeConfig) {
                             width: 0.5
                         }
                     },
-                }
+                })
             ]
     };
 }
 
+function toTradeConfigArray(config) {
+    return [config.bb, config.s, config.wSize, config.vwSize, config.stopLimit.toFixed(2)];
+}
+
 if (!isMainThread) {
-    const {data, config} = workerData;
-    let result = runSimulation(data, config);
-    parentPort.postMessage(result);
+    const {data, configs} = workerData;
+    let maxGain = 0;
+    let workerOutput = [];
+    configs.forEach(config => {
+        let result = runSimulation(data, config);
+        if (result.netGain > 100) {
+            let output = toTradeConfigArray(config);
+            output.push(result.sells.y.length, result.netGain.toFixed(2));
+            if (result.netGain > maxGain) {
+                parentPort.postMessage({output: output});
+            }
+            workerOutput.push(output);
+        }
+    });
+    parentPort.postMessage({workerOutput: workerOutput});
 }
 
 module.exports = {runSimulation};

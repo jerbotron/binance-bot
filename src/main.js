@@ -30,11 +30,11 @@ function main() {
     const tradeConfig = new TradeConfig(
         "BTCUSDT",
         1.5,
-        2,
-        20,
-        5,
+        3,
+        100,
+        40,
         0.01,
-        Position.BUY,
+        Position.SELL,
         false);
     tradeConfig.log();
 

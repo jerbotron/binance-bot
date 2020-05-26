@@ -2,6 +2,10 @@
 
 "use strict";
 
+const Millisecond = 1;
+const Second = Millisecond * 1000;
+const Minute = Second * 60;
+
 const Position = Object.freeze({
 	BUY: 'BUY',
 	SELL: 'SELL',
@@ -33,5 +37,8 @@ module.exports = {
 	Position,
 	OrderStatus,
 	OrderType,
-	FilterType
+	FilterType,
+	Millisecond,
+	Second,
+	Minute
 };

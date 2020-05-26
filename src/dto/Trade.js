@@ -31,7 +31,7 @@ class TradeConfig {
 
     log() {
         console.log("TradeConfig: ");
-        console.log(`* BB: ${this.symbol}\n* S: ${this.s}\n* wSize: ${this.wSize}\n* vwSize: ${this.vwSize}\n* sT: ${this.stopLimit.toFixed(2)}\n* position: ${this.position}\n* isSimulation: ${this.isSimulation}`);
+        console.log(`* BB: ${this.bb}\n* S: ${this.s}\n* wSize: ${this.wSize}\n* vwSize: ${this.vwSize}\n* sT: ${this.stopLimit.toFixed(2)}\n* position: ${this.position}\n* isSimulation: ${this.isSimulation}`);
     }
 }
 

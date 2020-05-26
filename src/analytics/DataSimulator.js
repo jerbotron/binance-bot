@@ -6,11 +6,15 @@ const CONFIG = require("../../config.json");
 const plotly = require("plotly")(CONFIG.PLOTLY_USERNAME, CONFIG.PLOTLY_API_KEY);
 const fs = require("fs");
 const {
-    Position
-} = require("../common/Constants.js");
+    GetHistoricalKlines
+} = require('../http/Client');
+const {
+    Position,
+    Minute
+} = require("../common/Constants");
 const {
     TradeConfig,
-} = require("../dto/Trade.js");
+} = require("../dto/Trade");
 const {
     runSimulation
 } = require("./Worker");
@@ -22,11 +26,55 @@ const Pool = require('worker-threads-pool');
 class DataSimulator {
     constructor(filename) {
         this.filename = filename;
+        this.symbol = "BTCUSDT";
         this.data = [];
     }
 
+    async backfillData() {
+        await new Promise((resolve => {
+            if (!fs.existsSync(this.filename)) {
+                console.log("Back filling data from the beginning of Binance, this will take awhile...");
+                resolve(Date.parse("2017-01-01"));
+            } else {
+                fs.readFile(this.filename, 'utf-8', (err, data) => {
+                    if (err) throw err;
+                    let lastLine = data.trim().split('\n').slice(-1)[0];
+                    resolve(Date.parse(lastLine.split(',')[0]) + Minute);
+                });
+            }
+        })).then(async startTimeMs => {
+            let curTimeMs = Date.now();
+            if (curTimeMs - startTimeMs > Minute) {
+                let delta = Math.floor((curTimeMs - startTimeMs) / Minute);
+                let pages = Math.ceil(delta / 1000); // 1000 is the pageSize limit for /api/v3/klines API.
+                console.log(`Back filling ${delta} minutes (${pages} pages) of new data...`);
+                let writer = fs.createWriteStream(this.filename, {flags: 'a'});
+                for (let i = 0; i < pages; i++) {
+                    await new Promise((resolve => {
+                        GetHistoricalKlines(this.symbol, startTimeMs, curTimeMs).then(res => {
+                            let endTime = res[res.length - 1][0];
+                            res.forEach(kline => {
+                                kline[0] = (new Date(kline[0])).toISOString(); // open time
+                                kline[6] = (new Date(kline[6])).toISOString(); // close time
+                                kline.push('\n');
+                                writer.write(kline.join(','));
+                            });
+                            resolve(endTime);
+                        });
+                    })).then(prevTime => {
+                        startTimeMs = prevTime + Minute // next page
+                    });
+                }
+                writer.end();
+            }
+        }).catch(err => {
+            throw err
+        });
+        return new Promise(resolve => resolve());
+    }
+
     // startDate/endDate in YYYY-MM-DD format
-    simulateTradeStrategy(tradeConfig, startDate, endDate = null, plot = false) {
+    simulateTradeStrategy(tradeConfig, startDate, endDate = null, plot = false, record = false) {
         if (!endDate) {
             endDate = new Date(Date.now());
             endDate.setDate(endDate.getDate() + 1);
@@ -34,29 +82,35 @@ class DataSimulator {
         }
         startDate = new Date(startDate);
         startDate = startDate.toISOString().split('T')[0];
-        console.log(`Simulating trade strategy from ${startDate} to ${endDate}`);
-        console.log(tradeConfig);
 
         this.processData(this.filename, startDate, endDate).then(() => {
+            console.log(`Simulating trade strategy from ${startDate} to ${endDate}`);
             let result = runSimulation(this.data, tradeConfig);
-            let writer = fs.createWriteStream(`simulation/${startDate}_${endDate}.csv`, {flags: "w"});
-            writer.write("timestamp,order,price,gain\n");
+            let writer;
+            if (record) {
+                writer = fs.createWriteStream(`simulation/${startDate}_${endDate}.csv`, {flags: "w"});
+                writer.write("timestamp,order,price,gain\n");
+            }
             for (let i = 0; i < result.buys.x.length; i++) {
                 let buy = Number(result.buys.y[i]);
                 let sell = Number(result.sells.y[i]);
-                writer.write([result.buys.x[i], Position.BUY, result.buys.y[i]].join(',') + "\n");
-                writer.write([result.sells.x[i], Position.SELL, result.sells.y[i], sell - buy].join(',') + "\n");
+                if (writer) {
+                    writer.write([result.buys.x[i], Position.BUY, result.buys.y[i]].join(',') + "\n");
+                    writer.write([result.sells.x[i], Position.SELL, result.sells.y[i], sell - buy].join(',') + "\n");
+                }
             }
             if (plot) {
                 this.plot2YAxis("btc", result.plotData);
             }
-            writer.end();
+            if (writer) {
+                writer.end();
+            }
             console.log(`Done simulation, trades = ${result.sells.y.length}, net gain = ${result.netGain}`);
         });
     }
 
     // startDate/endDate in YYYY-MM-DD format
-    trainModel(modelConfig, startDate, endDate = null, poolSize = 1) {
+    trainModel(modelConfig, startDate, endDate = null, poolSize = 3) {
         if (!endDate) {
             endDate = new Date(Date.now());
             endDate.setDate(endDate.getDate() + 1);
@@ -67,14 +121,8 @@ class DataSimulator {
         console.log(`Training model for dataset from ${startDate} to ${endDate}`);
         console.log(modelConfig);
 
-        let startTime = new Date();
-        let writer = fs.createWriteStream(`model/${startDate}_${endDate}.csv`, {flags: "w"});
-        writer.write("bb,s,wSize,v_wSize,stop_threshold,trades,netgain\n");
-
         this.processData(this.filename, startDate, endDate).then(async () => {
-                // let logResults = (msg) => {
-                //     console.log(`BB: ${msg[0]}\ts: ${msg[1]}\twSize: ${msg[2]}\tvwSize: ${msg[3]}\tsT: ${msg[4]}\tn: ${msg[5]}\tgain: ${msg[6]}\t`)
-                // };
+                let startTime = new Date();
                 let work = [];
                 for (let bb = 1; bb <= modelConfig.bb; bb += 0.5) {
                     for (let s = 1; s <= modelConfig.s; s += 0.5) {
@@ -90,45 +138,56 @@ class DataSimulator {
 
                 console.log(`Beginning model simulations on [${work.length}] configs.`);
 
-                await this.distributeModelWorkers(work, writer, poolSize);
+                const results = await this.distributeModelWorkers(work, poolSize);
 
+                let writer = fs.createWriteStream(`model/${startDate}_${endDate}.csv`, {flags: "w"});
+                writer.write("bb,s,wSize,v_wSize,stop_threshold,trades,netgain\n");
+                results.forEach(res => {
+                    res.forEach(line => {
+                        line.push('\n');
+                        writer.write(line.join(','));
+                    })
+                });
                 writer.end();
                 console.log(`Done training model in ${(Date.now() - startTime.getTime()) / 1000}s`);
             }
         )
     }
 
-    async distributeModelWorkers(work, writer, poolSize) {
-        let maxGain = 0;
+    async distributeModelWorkers(work, poolSize) {
         const workerPool = new Pool({max: poolSize});
-        const promises = new Array(work.length)
-            .fill()
-            .map((_, i) => {
-                return new Promise((resolve, reject) => {
-                    workerPool.acquire('./Worker.js', {workerData: {data: this.data, config: work[i]}},
-                        (err, worker) => {
-                            if (err) throw err;
-                            worker.once('message', (result) => {
-                                if (result.netGain > 1000) {
-                                    let msg = [result.config.bb, result.config.s, result.config.wSize, result.config.vwSize,
-                                        result.config.stopLimit.toFixed(2), result.sells.y.length, result.netGain];
-                                    writer.write(msg.join(',') + "\n");
-                                    if (result.netGain > maxGain) {
-                                        maxGain = result.netGain;
-                                        console.log(msg.join(',\t'));
-                                    }
+        const workUnitsPerWorker = Math.ceil(work.length / poolSize);
+        const promises = new Array(poolSize);
+        let maxGain = 0;
+        for (let i = 0; i < poolSize; i++) {
+            promises[i] = new Promise(((resolve, reject) => {
+                workerPool.acquire('./Worker.js', {
+                        workerData: {
+                            data: this.data,
+                            configs: work.slice(i * workUnitsPerWorker, (i + 1) * workUnitsPerWorker)
+                        }
+                    },
+                    (err, worker) => {
+                        worker.on('message', (msg) => {
+                            if (msg.workerOutput) {
+                                resolve(msg.workerOutput);
+                            } else if (msg.output) {
+                                let netGain = msg.output[msg.output.length - 1];
+                                if (netGain > maxGain) {
+                                    console.log(msg.output.join('\t'));
+                                    maxGain = netGain;
                                 }
-                                resolve();
-                            });
-                            worker.once('error', err => {
-                                console.log(`error occurred in worker: ${err}`);
-                                reject();
-                            });
+                            }
                         });
-                });
-            });
+                        worker.once('error', err => {
+                            console.log(`error occurred in worker: ${err}`);
+                            reject();
+                        })
+                    })
+            }));
+        }
 
-        await Promise.all(promises);
+        return Promise.all(promises);
     }
 
     processData(filename, startDate, endDate) {
@@ -175,15 +234,22 @@ class DataSimulator {
     }
 }
 
-const ds = new DataSimulator("data/BTCUSDT-1m-data.csv");
-const modelConfig = new TradeConfig(
-    "BTCUSDT", 3, 5, 120, 120, 0.02);
+const ds = new DataSimulator("data/BTCUSDT-1m.csv");
 
-// ds.trainModel(modelConfig, "2020-04-01", "2020-05-01");
-// ds.trainModel(modelConfig, "2020-05-01", null);
+ds.backfillData().then(() => {
+    const modelConfig = new TradeConfig(
+        "BTCUSDT", 3, 8, 120, 120, 0.02, Position.BUY);
 
-const tradeConfig = new TradeConfig(
-    "BTCUSDT", 1.5, 2, 20, 5, 0.01, Position.BUY);
+    const tradeConfig = new TradeConfig(
+        "BTCUSDT", 2, 2, 100, 19, 0, Position.BUY);
 
-ds.simulateTradeStrategy(tradeConfig, "2020-05-17", null, true);
-// ds.simulateTradeStrategy(2, 1.5, 65, 15, "2020-05-01");
+    // ds.trainModel(modelConfig, "2020-05-01", "2020-05-02");
+    ds.simulateTradeStrategy(tradeConfig, "2020-05-01", "2020-05-02", true, false);
+    // ds.simulateTradeStrategy(tradeConfig, "2020-01-01", "2020-02-01", false, false);
+    // ds.simulateTradeStrategy(tradeConfig, "2020-02-01", "2020-03-01", false, false);
+    // ds.simulateTradeStrategy(tradeConfig, "2020-03-01", "2020-04-01", false, false);
+    // ds.simulateTradeStrategy(tradeConfig, "2020-04-01", "2020-05-01", false, false);
+    // ds.simulateTradeStrategy(tradeConfig, "2020-05-01", null, false, false);
+}).catch(e => {
+    console.log("error backfilling kline data, " + e);
+});
