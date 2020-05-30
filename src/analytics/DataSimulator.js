@@ -56,8 +56,7 @@ class DataSimulator {
                             res.forEach(kline => {
                                 kline[0] = (new Date(kline[0])).toISOString(); // open time
                                 kline[6] = (new Date(kline[6])).toISOString(); // close time
-                                kline.push('\n');
-                                writer.write(kline.join(','));
+                                writer.write(kline.join(',') + "\n");
                             });
                             resolve(endTime);
                         });
@@ -110,7 +109,7 @@ class DataSimulator {
     }
 
     // startDate/endDate in YYYY-MM-DD format
-    trainModel(modelConfig, startDate, endDate = null, poolSize = 3) {
+    async trainModel(modelConfig, startDate, endDate = null, poolSize = 4) {
         if (!endDate) {
             endDate = new Date(Date.now());
             endDate.setDate(endDate.getDate() + 1);
@@ -121,7 +120,7 @@ class DataSimulator {
         console.log(`Training model for dataset from ${startDate} to ${endDate}`);
         console.log(modelConfig);
 
-        this.processData(this.filename, startDate, endDate).then(async () => {
+        return this.processData(this.filename, startDate, endDate).then(async () => {
                 let startTime = new Date();
                 let work = [];
                 for (let bb = 1; bb <= modelConfig.bb; bb += 0.5) {
@@ -144,8 +143,7 @@ class DataSimulator {
                 writer.write("bb,s,wSize,v_wSize,stop_threshold,trades,netgain\n");
                 results.forEach(res => {
                     res.forEach(line => {
-                        line.push('\n');
-                        writer.write(line.join(','));
+                        writer.write(line.join(',') + "\n");
                     })
                 });
                 writer.end();
@@ -236,15 +234,25 @@ class DataSimulator {
 
 const ds = new DataSimulator("data/BTCUSDT-1m.csv");
 
-ds.backfillData().then(() => {
+ds.backfillData().then(async () => {
     const modelConfig = new TradeConfig(
-        "BTCUSDT", 3, 8, 120, 120, 0.02, Position.BUY);
+        "BTCUSDT", 3, 8, 120, 60, 0.02, Position.BUY);
 
     const tradeConfig = new TradeConfig(
-        "BTCUSDT", 2, 2, 100, 19, 0, Position.BUY);
+        "BTCUSDT",
+        1,
+        4,
+        15,
+        3,
+        0.02,
+        Position.BUY);
 
-    // ds.trainModel(modelConfig, "2020-05-01", "2020-05-02");
-    ds.simulateTradeStrategy(tradeConfig, "2020-05-01", "2020-05-02", true, false);
+    await ds.trainModel(modelConfig, "2019-01-01", "2019-02-01").then();
+    console.log("starting second set");
+    await ds.trainModel(modelConfig, "2019-02-01", "2019-03-01").then();
+    await ds.trainModel(modelConfig, "2019-03-01", "2019-04-01").then();
+    await ds.trainModel(modelConfig, "2019-04-01", "2019-05-01").then();
+    // ds.simulateTradeStrategy(tradeConfig, "2020-01-01", null, false, false);
     // ds.simulateTradeStrategy(tradeConfig, "2020-01-01", "2020-02-01", false, false);
     // ds.simulateTradeStrategy(tradeConfig, "2020-02-01", "2020-03-01", false, false);
     // ds.simulateTradeStrategy(tradeConfig, "2020-03-01", "2020-04-01", false, false);

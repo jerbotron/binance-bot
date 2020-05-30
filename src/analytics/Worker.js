@@ -7,7 +7,8 @@ const {
     Position
 } = require("../common/Constants");
 const {
-    TradeSnapshot,
+    TradeStrategyA,
+    TradeStrategyB
 } = require("../dto/Trade");
 const {
     Candle,
@@ -48,9 +49,9 @@ function runSimulation(data, tradeConfig) {
     };
     let velAccHandler = (t, v, a) => {
         vel.push(t, v);
-        if (vel.x.length % tradeConfig.vwSize === 0) {
-            velMarkers.push(t, v);
-        }
+        // if (vel.x.length % tradeConfig.vwSize === 0) {
+        //     velMarkers.push(t, v);
+        // }
         if (acc.x.length > 0) {
             acc.push(acc.x[acc.x.length - 1], a);
         }
@@ -58,7 +59,7 @@ function runSimulation(data, tradeConfig) {
     };
 
     // Create trade snapshot and begin simulation
-    let snapshot = new TradeSnapshot(tradeConfig, data.slice(0, tradeConfig.wSize), false, velAccHandler);
+    let snapshot = new TradeStrategyB(tradeConfig, data.slice(0, tradeConfig.wSize), false, velAccHandler);
     for (let i = 0; i < data.length; i++) {
         let candle = new Candle(data[i]);
         close.push(candle.eventTime, Number(candle.close));
@@ -117,11 +118,11 @@ function runSimulation(data, tradeConfig) {
                         }
                     }
                 }),
-                velMarkers.getPlotData({
-                    y: new Array(velMarkers.y.length).fill(0),
-                    yaxis: "y2",
-                    mode: "markers"
-                }),
+                // velMarkers.getPlotData({
+                //     y: new Array(velMarkers.y.length).fill(0),
+                //     yaxis: "y2",
+                //     mode: "markers"
+                // }),
                 vel.getPlotData({yaxis: "y2"}),
                 acc.getPlotData({yaxis: "y2"}),
                 buys.getPlotData({
@@ -164,7 +165,7 @@ if (!isMainThread) {
     let workerOutput = [];
     configs.forEach(config => {
         let result = runSimulation(data, config);
-        if (result.netGain > 100) {
+        if (result.netGain > 750) {
             let output = toTradeConfigArray(config);
             output.push(result.sells.y.length, result.netGain.toFixed(2));
             if (result.netGain > maxGain) {

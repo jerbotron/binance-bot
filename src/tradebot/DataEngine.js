@@ -7,7 +7,8 @@ const {
     GetHistoricalKlines
 } = require('../http/Client');
 const {
-    TradeSnapshot
+    TradeStrategyA,
+    TradeStrategyB
 } = require('../dto/Trade');
 const {
     formatDate,
@@ -84,7 +85,7 @@ class DataEngine {
         return GetHistoricalKlines(this.tradeConfig.symbol, startTime.getTime(), curTime.getTime())
             .then(body => {
                     return new Promise(resolve => {
-                        resolve(new TradeSnapshot(this.tradeConfig, body));
+                        resolve(new TradeStrategyA(this.tradeConfig, body));
                     });
                 }
             );
